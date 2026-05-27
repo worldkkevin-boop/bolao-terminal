@@ -26,8 +26,10 @@ export default async function GroupDashboard({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const { id } = await params
-  const { tab } = await searchParams
+  const { tab, filter } = await searchParams
   const activeTab = typeof tab === 'string' ? tab : 'matches'
+  const validFilters = ['upcoming', 'live', 'finished'] as const
+  const activeFilter = typeof filter === 'string' && validFilters.includes(filter as any) ? filter as typeof validFilters[number] : 'upcoming'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -49,12 +51,17 @@ export default async function GroupDashboard({
 
   const currentUserRole = group.group_members.find((m: any) => m.user_id === user.id)?.role
 
-  // 3. Puxa os Jogos
-  const { data: matches } = await supabase
-    .from('matches')
-    .select('*')
-    .order('kickoff', { ascending: true })
-    .limit(10)
+  // 3. Puxa os Jogos (filtrados por status) + counts em paralelo
+  const statusMap = { upcoming: 'UPC', live: 'LIVE', finished: 'FIN' } as const
+  const matchStatus = statusMap[activeFilter]
+  const isFinished = activeFilter === 'finished'
+
+  const [{ count: upcomingCount }, { count: liveCount }, { count: finishedCount }, { data: matches }] = await Promise.all([
+    supabase.from('matches').select('*', { count: 'exact', head: true }).eq('status', 'UPC'),
+    supabase.from('matches').select('*', { count: 'exact', head: true }).eq('status', 'LIVE'),
+    supabase.from('matches').select('*', { count: 'exact', head: true }).eq('status', 'FIN'),
+    supabase.from('matches').select('*').eq('status', matchStatus).order('kickoff', { ascending: !isFinished }).limit(30),
+  ])
 
   // 4. Puxa TODOS os palpites deste grupo para calcular o ranking
   const { data: allGuesses } = await supabase
@@ -170,6 +177,33 @@ export default async function GroupDashboard({
         {/* ABA: PARTIDAS */}
         {activeTab === 'matches' && (
           <section className="space-y-6 max-w-3xl mx-auto">
+
+            {/* Sub-filtro: Futuras / Ao vivo / Encerradas */}
+            <div className="flex gap-2 justify-center">
+              {[
+                { key: 'upcoming',  label: 'Futuras',    count: upcomingCount ?? 0, color: '#00c2ff' },
+                { key: 'live',      label: 'Ao vivo',    count: liveCount ?? 0,     color: '#ff3d57' },
+                { key: 'finished',  label: 'Encerradas', count: finishedCount ?? 0, color: '#00d68f' },
+              ].map(f => {
+                const isActive = activeFilter === f.key
+                const hasLive = f.key === 'live' && (liveCount ?? 0) > 0
+                return (
+                  <Link
+                    key={f.key}
+                    href={`/groups/${group.id}?tab=matches&filter=${f.key}`}
+                    className={`text-[10px] md:text-xs font-bold tracking-wider px-4 py-2 rounded-full border transition-all ${
+                      isActive
+                        ? 'text-black'
+                        : 'text-[#8b94a8] border-[#2a3140] hover:border-[#5d6678]'
+                    } ${hasLive && !isActive ? 'animate-pulse' : ''}`}
+                    style={isActive ? { background: f.color, borderColor: f.color } : hasLive ? { borderColor: f.color, color: f.color } : {}}
+                  >
+                    {f.label} ({f.count})
+                  </Link>
+                )
+              })}
+            </div>
+
             <div className="space-y-4">
               {matches?.map(match => {
                 const guess = guessesMap.get(match.id)
