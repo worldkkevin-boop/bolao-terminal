@@ -2,7 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import TeamFlag from '@/components/TeamFlag'
+import TeamLogo from '@/components/TeamLogo'
 import { calculateScoreDetailed } from '@/utils/scoring'
 
 export default async function MatchGuessesPage({ 
@@ -130,7 +130,7 @@ export default async function MatchGuessesPage({
 
           <div className="flex items-center justify-between w-full px-2 md:px-12">
             <div className="flex flex-col items-center flex-1">
-              <TeamFlag team={match.home_team} size="lg" />
+              <TeamLogo teamId={match.home_team_id} teamName={match.home_team} size="lg" />
               <span className="text-sm md:text-base font-bold truncate text-center w-full">{match.home_team}</span>
             </div>
             
@@ -142,7 +142,7 @@ export default async function MatchGuessesPage({
             </div>
             
             <div className="flex flex-col items-center flex-1">
-              <TeamFlag team={match.away_team} size="lg" />
+              <TeamLogo teamId={match.away_team_id} teamName={match.away_team} size="lg" />
               <span className="text-sm md:text-base font-bold truncate text-center w-full">{match.away_team}</span>
             </div>
           </div>

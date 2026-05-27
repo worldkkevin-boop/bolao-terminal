@@ -1,8 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { fetchScoringRules } from '@/utils/scoringRules'
-import { SCORING_LABELS, ScoreCategory } from '@/utils/scoring'
+import { SCORING_LABELS, ScoreCategory, DEFAULT_SCORING_RULES } from '@/utils/scoring'
 import { updateScoringRules } from './actions'
 
 const EDITABLE_CATEGORIES: ScoreCategory[] = [
@@ -20,7 +19,7 @@ export default async function ScoringAdminPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user || user.email !== 'worldkkevin@gmail.com') redirect('/')
 
-  const rules = await fetchScoringRules()
+  const rules = DEFAULT_SCORING_RULES
 
   return (
     <div className="min-h-screen bg-[#08090b] text-[#e6eaf2] font-mono p-6">

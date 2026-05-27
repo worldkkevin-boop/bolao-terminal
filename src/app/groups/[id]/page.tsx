@@ -8,7 +8,7 @@ import { parseGroupScoringRules } from '@/utils/scoringRules'
 import MatchCountdown from '@/components/MatchCountdown'
 import { computeInitialLabel } from '@/utils/countdown'
 import CopyInviteButton from '@/components/CopyInviteButton'
-import TeamFlag from '@/components/TeamFlag'
+import TeamLogo from '@/components/TeamLogo'
 import DeleteGroupButton from '@/components/DeleteGroupButton'
 
 export default async function GroupDashboard({ 
@@ -290,7 +290,7 @@ export default async function GroupDashboard({
                     {/* Escudos e Nomes */}
                     <div className="flex items-center justify-between w-full px-2 md:px-8">
                       <div className="flex flex-col items-center flex-1">
-                        <TeamFlag team={match.home_team} size="md" />
+                        <TeamLogo teamId={match.home_team_id} teamName={match.home_team} size="md" />
                         <span className="text-xs md:text-sm font-bold truncate text-center w-full">{match.home_team}</span>
                       </div>
                       
@@ -304,7 +304,7 @@ export default async function GroupDashboard({
                       </div>
                       
                       <div className="flex flex-col items-center flex-1">
-                        <TeamFlag team={match.away_team} size="md" />
+                        <TeamLogo teamId={match.away_team_id} teamName={match.away_team} size="md" />
                         <span className="text-xs md:text-sm font-bold truncate text-center w-full">{match.away_team}</span>
                       </div>
                     </div>
