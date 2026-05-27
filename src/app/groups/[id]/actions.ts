@@ -55,7 +55,7 @@ export async function saveGuess(formData: FormData) {
 }
 
 export async function deleteGroup(groupId: string) {
-  // Verifica ownership com client autenticado (respeita RLS de leitura)
+  // Verifica ownership com client autenticado
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autorizado' }
@@ -69,35 +69,14 @@ export async function deleteGroup(groupId: string) {
 
   if (!group) return { error: 'Não autorizado' }
 
-  // Usa service role para bypassar RLS nas deleções
+  // Service role bypassa RLS — ON DELETE CASCADE no banco cuida dos filhos
   const admin = createAdminClient()
+  const { error } = await admin.from('groups').delete().eq('id', groupId)
 
-  const { data: bonusQuestions } = await admin
-    .from('bonus_questions')
-    .select('id')
-    .eq('group_id', groupId)
-
-  if (bonusQuestions && bonusQuestions.length > 0) {
-    const { error: baErr } = await admin
-      .from('bonus_answers')
-      .delete()
-      .in('question_id', bonusQuestions.map((q: { id: string }) => q.id))
-    if (baErr) { console.error('[deleteGroup] bonus_answers:', baErr); return { error: 'Erro ao excluir grupo' } }
+  if (error) {
+    console.error('[deleteGroup]', error)
+    return { error: 'Erro ao excluir grupo' }
   }
-
-  const steps: Array<{ table: string; filter: { col: string; val: string } }> = [
-    { table: 'bonus_questions', filter: { col: 'group_id', val: groupId } },
-    { table: 'guesses',         filter: { col: 'group_id', val: groupId } },
-    { table: 'group_members',   filter: { col: 'group_id', val: groupId } },
-  ]
-
-  for (const step of steps) {
-    const { error } = await admin.from(step.table).delete().eq(step.filter.col, step.filter.val)
-    if (error) { console.error(`[deleteGroup] ${step.table}:`, error); return { error: 'Erro ao excluir grupo' } }
-  }
-
-  const { error: groupErr } = await admin.from('groups').delete().eq('id', groupId)
-  if (groupErr) { console.error('[deleteGroup] groups:', groupErr); return { error: 'Erro ao excluir grupo' } }
 
   redirect('/')
 }
