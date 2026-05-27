@@ -67,16 +67,31 @@ export default async function GroupDashboard({
   // ==========================
   // CÁLCULO DO LEADERBOARD
   // ==========================
+
+  // Lookup O(1) de matches por id (evita .find() repetido)
+  const matchesMap = new Map(matches?.map(m => [m.id, m]) || [])
+
+  // Agrupa guesses por user_id uma vez só (evita .filter() repetido)
+  const guessesByUser = new Map<string, typeof allGuesses>()
+  for (const g of allGuesses || []) {
+    const list = guessesByUser.get(g.user_id)
+    if (list) {
+      list.push(g)
+    } else {
+      guessesByUser.set(g.user_id, [g])
+    }
+  }
+
   const leaderboard = group.group_members.map((member: any) => {
     let totalPoints = 0
     
-    // Filtra os palpites deste membro
-    const memberGuesses = allGuesses?.filter(g => g.user_id === member.user_id) || []
+    // Pega os palpites do membro via Map — O(1)
+    const memberGuesses = guessesByUser.get(member.user_id) || []
     
     // Conta os pontos
     memberGuesses.forEach(guess => {
-      // Achar o jogo correspondente
-      const match = matches?.find(m => m.id === guess.match_id)
+      // Lookup O(1) no Map ao invés de .find()
+      const match = matchesMap.get(guess.match_id)
       
       // Só pontua se o jogo já acabou (FIN) ou estiver ao vivo (LIVE) pra emoção
       if (match && (match.status === 'FIN' || match.status === 'LIVE') && match.score_home !== null && match.score_away !== null) {
