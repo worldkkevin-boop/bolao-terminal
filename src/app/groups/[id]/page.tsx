@@ -6,19 +6,7 @@ import { saveGuess, deleteGroup, leaveGroup } from './actions'
 import { calculateScore, calculateScoreDetailed } from '@/utils/scoring'
 import MatchCountdown from '@/components/MatchCountdown'
 import { computeInitialLabel } from '@/utils/countdown'
-
-const flagsMap: Record<string, string> = {
-  'Brazil': '🇧🇷', 'Argentina': '🇦🇷', 'France': '🇫🇷', 'Germany': '🇩🇪',
-  'Spain': '🇪🇸', 'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'Portugal': '🇵🇹', 'Italy': '🇮🇹',
-  'Netherlands': '🇳🇱', 'Uruguay': '🇺🇾', 'Croatia': '🇭🇷', 'Belgium': '🇧🇪',
-  'Colombia': '🇨🇴', 'Chile': '🇨🇱', 'Peru': '🇵🇪', 'Mexico': '🇲🇽',
-  'USA': '🇺🇸', 'Canada': '🇨🇦', 'Japan': '🇯🇵', 'South Korea': '🇰🇷',
-  'Czech Republic': '🇨🇿', 'Qatar': '🇶🇦', 'Switzerland': '🇨🇭',
-  'Bosnia & Herzegovina': '🇧🇦'
-}
-function getFlagEmoji(teamName: string) {
-  return flagsMap[teamName] || '🛡️'
-}
+import { getFlagEmoji } from '@/utils/flags'
 
 export default async function GroupDashboard({ 
   params,
@@ -403,6 +391,14 @@ export default async function GroupDashboard({
                       </button>
                     </form>
 
+                    {hasStarted && (
+                      <Link 
+                        href={`/groups/${group.id}/matches/${match.id}`}
+                        className="text-xs text-[#00c2ff] hover:text-white transition w-full text-center mt-2 font-bold"
+                      >
+                        Ver palpites do grupo →
+                      </Link>
+                    )}
                   </div>
                 )
               })}
