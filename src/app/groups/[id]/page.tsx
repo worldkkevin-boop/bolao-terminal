@@ -70,7 +70,7 @@ export default async function GroupDashboard({ params }: { params: Promise<{ id:
   })
 
   // Ordena por maior pontuação
-  leaderboard.sort((a, b) => b.points - a.points)
+  leaderboard.sort((a: any, b: any) => b.points - a.points)
 
   return (
     <div className="min-h-screen bg-[#08090b] text-[#e6eaf2] font-mono p-6">
