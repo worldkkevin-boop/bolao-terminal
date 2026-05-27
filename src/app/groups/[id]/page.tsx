@@ -79,14 +79,14 @@ export default async function GroupDashboard({
   const { data: allFinishedMatches } = await supabase
     .from('matches')
     .select('*')
-    .in('status', ['FIN', 'LIVE'])
+    .or('status.eq.FIN,status.eq.LIVE')
     .order('kickoff', { ascending: false })
 
   // Lookup O(1) de matches por id para o leaderboard
   const allMatchesMap = new Map(allFinishedMatches?.map(m => [m.id, m]) || [])
 
   // Determinar escopo do ranking
-  let scopedMatchIds: Set<number>
+  let scopedMatchIds: Set<any>
   let rankingSubtitle = 'Ranking Geral'
 
   if (activeScope === 'round') {
@@ -117,13 +117,15 @@ export default async function GroupDashboard({
   }
 
   // Agrupa guesses por user_id uma vez só (evita .filter() repetido)
-  const guessesByUser = new Map<string, typeof allGuesses>()
-  for (const g of allGuesses || []) {
-    const list = guessesByUser.get(g.user_id)
-    if (list) {
-      list.push(g)
-    } else {
-      guessesByUser.set(g.user_id, [g])
+  const guessesByUser = new Map<string, NonNullable<typeof allGuesses>>()
+  if (allGuesses) {
+    for (const g of allGuesses) {
+      const list = guessesByUser.get(g.user_id)
+      if (list) {
+        list.push(g)
+      } else {
+        guessesByUser.set(g.user_id, [g])
+      }
     }
   }
 
