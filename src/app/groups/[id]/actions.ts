@@ -58,12 +58,34 @@ export async function deleteGroup(groupId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autorizado' }
 
-  // Excluir grupo (apenas se for owner)
-  const { error } = await supabase
+  // Confirma que o user é owner antes de qualquer coisa
+  const { data: group } = await supabase
     .from('groups')
-    .delete()
+    .select('id')
     .eq('id', groupId)
     .eq('owner_id', user.id)
+    .single()
+
+  if (!group) return { error: 'Não autorizado' }
+
+  // Deleta registros filhos na ordem correta (FK constraints)
+  const { data: bonusQuestions } = await supabase
+    .from('bonus_questions')
+    .select('id')
+    .eq('group_id', groupId)
+
+  if (bonusQuestions && bonusQuestions.length > 0) {
+    await supabase
+      .from('bonus_answers')
+      .delete()
+      .in('question_id', bonusQuestions.map(q => q.id))
+  }
+
+  await supabase.from('bonus_questions').delete().eq('group_id', groupId)
+  await supabase.from('guesses').delete().eq('group_id', groupId)
+  await supabase.from('group_members').delete().eq('group_id', groupId)
+
+  const { error } = await supabase.from('groups').delete().eq('id', groupId)
 
   if (error) return { error: 'Erro ao excluir grupo' }
   redirect('/')
