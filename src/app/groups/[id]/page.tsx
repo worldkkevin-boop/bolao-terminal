@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { saveGuess, leaveGroup } from './actions'
-import { calculateScore, calculateScoreDetailed } from '@/utils/scoring'
+import { calculateScore, calculateScoreDetailed, SCORING_LABELS, ScoreCategory } from '@/utils/scoring'
+import { fetchScoringRules } from '@/utils/scoringRules'
 import MatchCountdown from '@/components/MatchCountdown'
 import { computeInitialLabel } from '@/utils/countdown'
 import CopyInviteButton from '@/components/CopyInviteButton'
@@ -45,7 +46,10 @@ export default async function GroupDashboard({
 
   const currentUserRole = group.group_members.find((m: any) => m.user_id === user.id)?.role
 
-  // 3. Puxa os Jogos (filtrados por status) + counts em paralelo
+  // 3. Regras de pontuação do banco (com fallback nos defaults)
+  const scoringRules = await fetchScoringRules()
+
+  // 4. Puxa os Jogos (filtrados por status) + counts em paralelo
   const statusMap = { upcoming: 'UPC', live: 'LIVE', finished: 'FIN' } as const
   const matchStatus = statusMap[activeFilter]
   const isFinished = activeFilter === 'finished'
@@ -154,7 +158,7 @@ export default async function GroupDashboard({
         if (match.status === 'FIN') {
           matchPoints += guess.points ?? 0
         } else {
-          matchPoints += calculateScore(guess.score_home, guess.score_away, match.score_home, match.score_away)
+          matchPoints += calculateScore(guess.score_home, guess.score_away, match.score_home, match.score_away, scoringRules)
         }
       }
     })
@@ -271,7 +275,7 @@ export default async function GroupDashboard({
                 let pointsEarned = null;
                 let scoreDetails = null;
                 if (hasStarted && guess && match.score_home !== null && match.score_away !== null) {
-                  scoreDetails = calculateScoreDetailed(guess.score_home, guess.score_away, match.score_home, match.score_away);
+                  scoreDetails = calculateScoreDetailed(guess.score_home, guess.score_away, match.score_home, match.score_away, scoringRules);
                   pointsEarned = scoreDetails.points;
                 }
 
@@ -329,15 +333,7 @@ export default async function GroupDashboard({
                         {scoreDetails.points > 0 ? (
                           <div className={`text-xs font-bold px-4 py-1.5 rounded-full bg-[#08090b] border ${scoreDetails.category === 'EXATO' ? 'text-[#00d68f] border-[#00d68f]/30' : 'text-[#00c2ff] border-[#00c2ff]/30'}`}>
                             +{scoreDetails.points} pts · {
-                              {
-                                EXATO: 'Placar Exato',
-                                VENCEDOR_GOLS: 'Vencedor e Gols',
-                                EMPATE: 'Empate Acertado',
-                                VENCEDOR_SALDO: 'Vencedor e Saldo de Gols',
-                                VENCEDOR_GOLS_PERDEDOR: 'Vencedor e Gols do Perdedor',
-                                VENCEDOR: 'Vencedor',
-                                ERROU: 'Nenhum Acerto'
-                              }[scoreDetails.category]
+                              SCORING_LABELS[scoreDetails.category].label
                             }
                           </div>
                         ) : (
@@ -559,24 +555,21 @@ export default async function GroupDashboard({
             {/* Regras de Pontuação */}
             <h2 className="text-[10px] tracking-[0.3em] text-[#5d6678] pt-6 uppercase">REGRAS DE PONTUAÇÃO DO BOLÃO</h2>
             <div className="space-y-2">
-              {[
-                { label: 'Placar Exato',              pts: 25, color: '#00d68f', desc: 'Cravou o placar. Ex: palpitou 2x1 e deu 2x1.' },
-                { label: 'Vencedor e gols',           pts: 18, color: '#00c2ff', desc: 'Acertou o vencedor e os gols de um dos times. Ex: palpitou 2x1 e deu 2x0.' },
-                { label: 'Vencedor e saldo de gols',  pts: 15, color: '#5865F2', desc: 'Acertou o vencedor e a diferença de gols. Ex: palpitou 2x1 e deu 1x0.' },
-                { label: 'Empate',                    pts: 15, color: '#a13de3', desc: 'Acertou que ia empatar (placar diferente). Ex: palpitou 2x2 e deu 1x1.' },
-                { label: 'Vencedor e gols do perdedor', pts: 12, color: '#ffb547', desc: 'Acertou o vencedor e os gols do time perdedor. Ex: palpitou 2x0 e deu 3x0.' },
-                { label: 'Vencedor',                  pts: 6,  color: '#ff8c42', desc: 'Acertou apenas quem venceu o jogo. Ex: palpitou 2x0 e deu 3x2.' },
-              ].map(rule => (
-                <div key={rule.label} className="bg-[#12151b] border-[#2a3140] border rounded-xl p-4 flex items-center justify-between gap-4 shadow-sm" style={{ borderLeftWidth: 4, borderLeftColor: rule.color }}>
-                  <div className="min-w-0">
-                    <h3 className="font-bold text-sm text-[#e6eaf2]">{rule.label}</h3>
-                    <p className="text-xs text-[#8b94a8] mt-0.5">{rule.desc}</p>
+              {(Object.keys(SCORING_LABELS) as ScoreCategory[]).filter(c => c !== 'ERROU').map(category => {
+                const meta = SCORING_LABELS[category]
+                const pts = scoringRules[category]
+                return (
+                  <div key={category} className="bg-[#12151b] border border-[#2a3140] rounded-xl p-4 flex items-center justify-between gap-4 shadow-sm" style={{ borderLeftWidth: 4, borderLeftColor: meta.color }}>
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-sm text-[#e6eaf2]">{meta.label}</h3>
+                      <p className="text-xs text-[#8b94a8] mt-0.5">{meta.desc}</p>
+                    </div>
+                    <span className="text-xs font-bold px-3 py-1 rounded-full shrink-0" style={{ background: `${meta.color}20`, color: meta.color }}>
+                      +{pts} pts
+                    </span>
                   </div>
-                  <span className="text-xs font-bold px-3 py-1 rounded-full shrink-0" style={{ background: `${rule.color}20`, color: rule.color }}>
-                    +{rule.pts} pts
-                  </span>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             {/* Administração */}

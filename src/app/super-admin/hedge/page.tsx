@@ -26,7 +26,10 @@ export default async function SuperAdminPage() {
             HEDGE<span className="text-[#00d68f]">.</span>ENGINE
           </h1>
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
+          <Link href="/super-admin/scoring" className="text-xs bg-[#a13de3]/20 text-[#a13de3] border border-[#a13de3]/50 font-bold px-4 py-2 rounded hover:bg-[#a13de3] hover:text-white transition">
+            🏆 PONTUAÇÃO
+          </Link>
           <Link href="/" className="text-xs text-[#5d6678] hover:text-white transition py-2">
             ← VOLTAR AO INÍCIO
           </Link>
