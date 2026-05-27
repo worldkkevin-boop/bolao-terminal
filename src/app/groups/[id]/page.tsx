@@ -547,9 +547,14 @@ export default async function GroupDashboard({
                 </div>
               </div>
               {currentUserRole === 'owner' && (
-                <Link href={`/groups/${group.id}/upgrade`} className="bg-[#5865F2] text-white text-xs font-bold px-6 py-3 rounded-lg hover:bg-[#4752C4] transition flex items-center justify-center gap-2">
-                  🚀 AUMENTAR LIMITE
-                </Link>
+                <div className="flex flex-col gap-2">
+                  <Link href={`/groups/${group.id}/tv`} className="bg-[#00c2ff]/20 text-[#00c2ff] border border-[#00c2ff]/50 text-xs font-bold px-6 py-3 rounded-lg hover:bg-[#00c2ff] hover:text-black transition flex items-center justify-center gap-2">
+                    📺 MODO TV
+                  </Link>
+                  <Link href={`/groups/${group.id}/upgrade`} className="bg-[#5865F2] text-white text-xs font-bold px-6 py-3 rounded-lg hover:bg-[#4752C4] transition flex items-center justify-center gap-2">
+                    🚀 AUMENTAR LIMITE
+                  </Link>
+                </div>
               )}
             </div>
 
