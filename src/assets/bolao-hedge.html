@@ -1,0 +1,3534 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BOLÃO TERMINAL // Hedge Engine v1.0</title>
+<script>
+  // Silencia o warning "cdn.tailwindcss.com should not be used in production"
+  // (uso pessoal local — não vai pra produção)
+  const _origWarn = console.warn;
+  console.warn = function(...args) {
+    if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) return;
+    _origWarn.apply(console, args);
+  };
+</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          mono: ['JetBrains Mono', 'monospace'],
+          display: ['Space Grotesk', 'sans-serif'],
+        },
+        colors: {
+          'bg-deep':  '#08090b',
+          'bg-base':  '#0d0f13',
+          'bg-card':  '#12151b',
+          'bg-card2': '#171a22',
+          'border-l': '#1f242e',
+          'border-m': '#2a3140',
+          'txt-dim':  '#5d6678',
+          'txt-mid':  '#8b94a8',
+          'txt-hi':   '#e6eaf2',
+          'acc-grn':  '#00d68f',
+          'acc-grn2': '#00a872',
+          'acc-red':  '#ff3d57',
+          'acc-amb':  '#ffb547',
+          'acc-cyn':  '#00c2ff',
+          'acc-vio':  '#8b5cf6',
+        },
+      },
+    },
+  };
+</script>
+<style>
+  body { background: #08090b; }
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(42,49,64,.25) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(42,49,64,.25) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+  .glow-grn { box-shadow: 0 0 0 1px rgba(0,214,143,.25), 0 0 24px -4px rgba(0,214,143,.35); }
+  .glow-red { box-shadow: 0 0 0 1px rgba(255,61,87,.3),  0 0 18px -4px rgba(255,61,87,.45); }
+  .glow-cyn { box-shadow: 0 0 0 1px rgba(0,194,255,.3),  0 0 18px -4px rgba(0,194,255,.4); }
+
+  .pulse-live {
+    animation: pulseLive 1.4s ease-in-out infinite;
+  }
+  @keyframes pulseLive {
+    0%,100% { box-shadow: 0 0 0 0 rgba(255,61,87,.7); }
+    50%     { box-shadow: 0 0 0 6px rgba(255,61,87,0); }
+  }
+  .heat-cell {
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .heat-cell:hover { transform: scale(1.06); z-index: 2; box-shadow: 0 0 0 2px #00c2ff; }
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #2a3140; border-radius: 3px; }
+  .game-card { transition: border-color .2s, transform .2s; }
+  .game-card:hover { border-color: #00c2ff; transform: translateY(-2px); }
+  .game-card.selected { border-color: #00d68f; box-shadow: 0 0 0 1px #00d68f, 0 0 24px -6px rgba(0,214,143,.5); }
+  .ticker { animation: tickerScroll 40s linear infinite; }
+  @keyframes tickerScroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  .fade-in { animation: fadeIn .35s ease-out; }
+  @keyframes fadeIn { from {opacity:0; transform: translateY(6px);} to {opacity:1; transform:none;} }
+  .blink { animation: blink 1s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+
+  /* ===== MODO APRESENTAÇÃO ===== */
+  .presentation-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: radial-gradient(ellipse at top, #0d0f13 0%, #08090b 70%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 2rem; animation: fadeIn .3s ease-out;
+  }
+  .pres-card {
+    border: 2px solid currentColor;
+    padding: clamp(1rem, 3vw, 2.5rem) clamp(1.5rem, 4vw, 3.5rem);
+    text-align: center;
+    min-width: clamp(180px, 26vw, 320px);
+    background: rgba(18, 21, 27, .6);
+    backdrop-filter: blur(8px);
+  }
+  .pres-card .big-score {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: clamp(4rem, 12vw, 9rem);
+    line-height: .9;
+    letter-spacing: -.04em;
+    font-variant-numeric: tabular-nums;
+  }
+  .pres-card .big-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(.7rem, 1.5vw, 1rem);
+    letter-spacing: .3em;
+    margin-bottom: .5rem;
+  }
+
+  /* ===== CONFIDENCE PILLS ===== */
+  .conf-pill {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .25rem .6rem;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: .2em;
+    border: 1px solid currentColor;
+  }
+  .conf-bar { display: inline-flex; gap: 2px; height: 8px; align-items: flex-end; }
+  .conf-bar > span { width: 3px; background: currentColor; opacity: .25; height: 100%; }
+  .conf-bar > span.on { opacity: 1; }
+
+  /* ===== COPY FEEDBACK TOAST ===== */
+  .copy-toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #00d68f; color: #08090b;
+    padding: .75rem 1.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700; letter-spacing: .2em;
+    z-index: 200;
+    animation: toastIn .3s ease-out, toastOut .3s ease-in 1.8s forwards;
+    box-shadow: 0 8px 32px -8px rgba(0,214,143,.5);
+  }
+  @keyframes toastIn  { from { transform: translate(-50%, 20px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+  @keyframes toastOut { to   { transform: translate(-50%, 20px); opacity: 0; } }
+
+  /* ===== POLIMENTO ===== */
+  button { transition: all .15s ease; }
+  .game-card { position: relative; }
+  .game-card.has-guesses::before {
+    content: '✓ PALPITADO'; position: absolute; top: -1px; right: -1px;
+    padding: 2px 8px; background: #00d68f; color: #08090b;
+    font-size: 8px; font-weight: 700; letter-spacing: .15em;
+    z-index: 2;
+  }
+  .heat-cell-hl-1 { outline: 2px solid #00d68f !important; outline-offset: -2px; z-index: 3; }
+  .heat-cell-hl-2 { outline: 2px solid #ffb547 !important; outline-offset: -2px; z-index: 3; }
+  .heat-cell-hl-3 { outline: 2px solid #8b5cf6 !important; outline-offset: -2px; z-index: 3; }
+
+  /* ===== Date Filter visual ===== */
+  .date-filter-btn.active {
+    background: #00c2ff !important;
+    color: #08090b !important;
+    border-color: #00c2ff !important;
+    font-weight: 700;
+  }
+</style>
+</head>
+<body class="font-mono text-txt-hi min-h-screen grid-bg">
+
+<header class="border-b border-border-l bg-bg-deep/80 backdrop-blur sticky top-0 z-40">
+  <div class="max-w-[1600px] mx-auto px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2">
+        <div class="w-2.5 h-2.5 rounded-full bg-acc-grn pulse-live"></div>
+        <span class="text-[11px] tracking-[0.3em] text-txt-mid">SISTEMA ONLINE</span>
+      </div>
+      <div class="h-5 w-px bg-border-m"></div>
+      <h1 class="font-display font-bold text-lg tracking-tight">
+        BOLÃO<span class="text-acc-grn">.</span>TERMINAL
+        <span class="text-[10px] text-txt-dim tracking-widest ml-2">TOURNAMENT ENGINE v3.5 // ODDS</span>
+      </h1>
+    </div>
+
+    <div class="flex items-center gap-3 text-[11px] tracking-wider text-txt-mid">
+      <div class="hidden md:flex items-center gap-4">
+        <div><span class="text-txt-dim">A1</span> <span class="text-acc-grn">KEVIN</span></div>
+        <div><span class="text-txt-dim">A2</span> <span class="text-acc-amb">GABRIELLY</span></div>
+        <div><span class="text-txt-dim">A3</span> <span class="text-acc-vio">ZEBRA</span></div>
+        <div id="clock" class="text-txt-hi font-semibold tabular-nums">--:--:--</div>
+      </div>
+      <button id="btn-presentation" disabled
+              class="text-[10px] tracking-widest border border-border-m px-3 py-1.5 text-txt-mid hover:border-acc-cyn hover:text-acc-cyn transition disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Tecla P">
+        ⛶ MODO APRESENTAÇÃO
+      </button>
+    </div>
+  </div>
+
+  <div class="border-t border-border-l overflow-hidden bg-bg-base">
+    <div class="ticker whitespace-nowrap py-1.5 text-[11px] text-txt-mid flex gap-8">
+      <span id="ticker-content"></span>
+      <span id="ticker-content-2"></span>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-[1600px] mx-auto px-6 py-6 grid grid-cols-12 gap-6">
+
+  <section class="col-span-12 lg:col-span-5 xl:col-span-4">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <div class="text-[10px] tracking-[0.3em] text-txt-dim">SEÇÃO 01</div>
+        <h2 class="font-display font-bold text-xl">Dashboard de Jogos</h2>
+      </div>
+      <div class="flex gap-2">
+        <button id="btn-refresh" class="text-[10px] tracking-widest border border-border-m px-3 py-1.5 hover:border-acc-cyn hover:text-acc-cyn transition">
+          ↻ ATUALIZAR
+        </button>
+      </div>
+    </div>
+
+    <div id="league-selector" class="flex gap-1 mb-2 text-[10px] tracking-widest flex-wrap">
+      <!-- preenchido por JS -->
+    </div>
+
+    <div class="flex gap-1 mb-2 text-[10px] tracking-widest">
+      <button data-filter="ALL"  class="filter-btn px-3 py-1.5 bg-acc-grn text-bg-deep font-bold">TODOS</button>
+      <button data-filter="LIVE" class="filter-btn px-3 py-1.5 border border-border-m text-txt-mid hover:text-acc-red">AO VIVO</button>
+      <button data-filter="UPC"  class="filter-btn px-3 py-1.5 border border-border-m text-txt-mid hover:text-acc-cyn">PRÓXIMOS</button>
+      <button data-filter="FIN"  class="filter-btn px-3 py-1.5 border border-border-m text-txt-mid hover:text-txt-hi">FINALIZADOS</button>
+    </div>
+
+    <!-- Filtro de janela temporal -->
+    <div class="flex gap-1 mb-3 text-[10px] tracking-widest">
+      <button data-date-filter="ANY"   class="date-filter-btn active px-3 py-1.5 border border-border-m text-txt-mid">QUALQUER DATA</button>
+      <button data-date-filter="TODAY" class="date-filter-btn px-3 py-1.5 border border-border-m text-txt-mid">HOJE</button>
+      <button data-date-filter="WEEK"  class="date-filter-btn px-3 py-1.5 border border-border-m text-txt-mid">7 DIAS</button>
+    </div>
+
+    <div id="games-list" class="space-y-3 max-h-[80vh] overflow-y-auto scrollbar-thin pr-1">
+      </div>
+  </section>
+
+  <section class="col-span-12 lg:col-span-7 xl:col-span-5">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <div>
+        <div class="text-[10px] tracking-[0.3em] text-txt-dim">SEÇÃO 02</div>
+        <h2 class="font-display font-bold text-xl">Análise do Jogo <span class="text-acc-cyn text-sm font-mono">// POISSON λ</span></h2>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btn-tab-matriz"    class="analysis-tab text-[10px] tracking-widest px-3 py-1.5 bg-acc-cyn text-bg-deep font-bold">∑ MATRIZ</button>
+        <button id="btn-tab-diag"      class="analysis-tab text-[10px] tracking-widest px-3 py-1.5 border border-border-m text-txt-mid hover:text-acc-cyn">⚙ DIAGNÓSTICO</button>
+        <div id="matrix-status" class="text-[10px] tracking-widest text-txt-dim">AGUARDANDO</div>
+      </div>
+    </div>
+
+    <!-- TAB MATRIZ -->
+    <div id="tab-matriz">
+      <div id="matrix-container" class="bg-bg-card border border-border-l p-6 min-h-[480px]">
+        <div id="matrix-empty" class="h-[440px] flex flex-col items-center justify-center text-center">
+          <div class="w-16 h-16 border border-border-m flex items-center justify-center mb-4">
+            <span class="text-3xl text-txt-dim">∑</span>
+          </div>
+          <div class="text-txt-mid text-sm">Selecione uma partida no painel à esquerda</div>
+          <div class="text-txt-dim text-xs mt-1">A matriz de distribuição de Poisson será gerada</div>
+        </div>
+        <div id="matrix-content" class="hidden fade-in"></div>
+      </div>
+    </div>
+
+    <!-- TAB DIAGNÓSTICO -->
+    <div id="tab-diag" class="hidden">
+      <div id="diag-container" class="bg-bg-card border border-border-l p-6 min-h-[480px]">
+        <div id="diag-empty" class="h-[440px] flex flex-col items-center justify-center text-center">
+          <div class="w-16 h-16 border border-border-m flex items-center justify-center mb-4">
+            <span class="text-3xl text-txt-dim">⚙</span>
+          </div>
+          <div class="text-txt-mid text-sm">Selecione uma partida para gerar o diagnóstico</div>
+        </div>
+        <div id="diag-content" class="hidden fade-in space-y-4 text-[12px]"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="col-span-12 xl:col-span-3">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <div class="text-[10px] tracking-[0.3em] text-txt-dim">SEÇÃO 03</div>
+        <h2 class="font-display font-bold text-xl">Tournament Engine</h2>
+      </div>
+      <div class="text-[10px] tracking-widest text-acc-grn">▲ 3-WAY</div>
+    </div>
+
+    <!-- ═══ PAINEL TOURNAMENT MODE ═══ -->
+    <div class="bg-gradient-to-br from-bg-card to-bg-card2 border border-acc-vio/40 p-4 mb-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-[10px] tracking-[0.3em] text-acc-vio">🏆 MODO TORNEIO</div>
+        <button id="btn-tournament-help" class="text-[10px] text-txt-dim hover:text-acc-cyn">?</button>
+      </div>
+
+      <!-- Modo de jogo -->
+      <div class="text-[9px] tracking-widest text-txt-dim mb-1">ESTRATÉGIA</div>
+      <div class="grid grid-cols-4 gap-1 mb-3">
+        <button data-tmode="SAFE"       class="tmode-btn text-[9px] tracking-wider py-1.5 border border-border-m text-txt-mid hover:border-acc-grn">DEFESA</button>
+        <button data-tmode="BALANCED"   class="tmode-btn text-[9px] tracking-wider py-1.5 border border-border-m text-txt-mid hover:border-acc-cyn">BAL</button>
+        <button data-tmode="AGGRESSIVE" class="tmode-btn text-[9px] tracking-wider py-1.5 border border-border-m text-txt-mid hover:border-acc-amb">ATAQUE</button>
+        <button data-tmode="DESPERATE"  class="tmode-btn text-[9px] tracking-wider py-1.5 border border-border-m text-txt-mid hover:border-acc-red">ALL-IN</button>
+      </div>
+
+      <!-- Posição no ranking + total de jogadores -->
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        <div>
+          <div class="text-[9px] tracking-widest text-txt-dim mb-1">MINHA POSIÇÃO</div>
+          <input id="input-my-rank" type="number" min="1" max="50" placeholder="?" class="w-full bg-bg-deep border border-border-m px-2 py-1 text-sm text-txt-hi text-center tabular-nums focus:border-acc-vio focus:outline-none">
+        </div>
+        <div>
+          <div class="text-[9px] tracking-widest text-txt-dim mb-1">TOTAL JOGADORES</div>
+          <input id="input-total-players" type="number" min="2" max="100" value="12" class="w-full bg-bg-deep border border-border-m px-2 py-1 text-sm text-txt-hi text-center tabular-nums focus:border-acc-vio focus:outline-none">
+        </div>
+      </div>
+
+      <!-- Camuflagem -->
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input id="input-camouflage" type="checkbox" class="w-4 h-4 accent-acc-amb">
+        <span class="text-[10px] tracking-widest text-txt-mid">CAMUFLAGEM ZEBRA (parecer amador)</span>
+      </label>
+
+      <!-- Aviso da estratégia atual -->
+      <div id="tournament-advice" class="mt-3 text-[10px] text-txt-dim leading-relaxed border-t border-border-l pt-3">
+        <!-- preenchido por renderTournamentAdvice() -->
+      </div>
+    </div>
+
+    <div id="hedge-container" class="space-y-4">
+      <div id="hedge-empty" class="bg-bg-card border border-dashed border-border-m p-6 text-center text-txt-dim text-xs">
+        Selecione um jogo para gerar a estratégia de Hedge automática.
+      </div>
+      <div id="hedge-content" class="hidden space-y-4 fade-in"></div>
+    </div>
+
+    <div class="mt-6 bg-bg-card border border-border-l p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-[10px] tracking-[0.3em] text-txt-dim">REGRAS DE PONTUAÇÃO</div>
+        <button id="btn-edit-points" class="text-[10px] tracking-widest border border-border-m px-2 py-1 hover:border-acc-cyn hover:text-acc-cyn transition">✎ EDITAR</button>
+      </div>
+      <div id="points-display" class="space-y-1.5 text-xs"></div>
+      <div id="points-edit" class="hidden space-y-2 text-xs"></div>
+      <button id="btn-save-points" class="hidden mt-3 w-full text-[10px] tracking-widest border border-acc-grn text-acc-grn px-2 py-1.5 hover:bg-acc-grn hover:text-bg-deep transition">✓ SALVAR</button>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════ SEÇÃO 04 -->
+  <section class="col-span-12 mt-2">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div>
+        <div class="text-[10px] tracking-[0.3em] text-txt-dim">SEÇÃO 04</div>
+        <h2 class="font-display font-bold text-xl">Copa do Mundo 2026 <span class="text-acc-grn text-sm font-mono">// CLASSIFICAÇÃO</span></h2>
+      </div>
+      <div class="flex gap-2 items-center flex-wrap">
+        <button id="btn-tab-grupos"   class="standings-tab text-[10px] tracking-widest px-3 py-1.5 bg-acc-grn text-bg-deep font-bold">▤ GRUPOS</button>
+        <button id="btn-tab-bracket"  class="standings-tab text-[10px] tracking-widest px-3 py-1.5 border border-border-m text-txt-mid hover:text-acc-cyn">⬡ CHAVEAMENTO</button>
+        <button id="btn-refresh-standings" class="text-[10px] tracking-widest border border-border-m px-3 py-1.5 hover:border-acc-cyn hover:text-acc-cyn transition">↻ ATUALIZAR</button>
+      </div>
+    </div>
+
+    <div id="standings-status" class="text-[10px] tracking-widest text-txt-dim mb-3">AGUARDANDO DADOS</div>
+
+    <!-- GRUPOS VIEW -->
+    <div id="grupos-view">
+      <div id="grupos-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"></div>
+    </div>
+
+    <!-- BRACKET VIEW -->
+    <div id="bracket-view" class="hidden">
+      <div id="bracket-scroll" class="overflow-x-auto pb-4">
+        <div id="bracket-grid" class="flex gap-4 min-w-max"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════ SEÇÃO 05 -->
+  <section class="col-span-12 mt-2">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div>
+        <div class="text-[10px] tracking-[0.3em] text-txt-dim">SEÇÃO 05</div>
+        <h2 class="font-display font-bold text-xl">Bolão Tracker <span class="text-acc-amb text-sm font-mono">// PLACAR & ESTRATÉGIA</span></h2>
+      </div>
+      <div class="flex gap-2 flex-wrap">
+        <button id="btn-tracker-placar"    class="tracker-tab text-[10px] tracking-widest px-3 py-1.5 bg-acc-amb text-bg-deep font-bold">🏆 PLACAR</button>
+        <button id="btn-tracker-jogos"     class="tracker-tab text-[10px] tracking-widest px-3 py-1.5 border border-border-m text-txt-mid hover:text-acc-amb">⚽ JOGOS</button>
+        <button id="btn-tracker-estrategia" class="tracker-tab text-[10px] tracking-widest px-3 py-1.5 border border-border-m text-txt-mid hover:text-acc-amb">📊 ESTRATÉGIA</button>
+        <button id="btn-tracker-config"    class="tracker-tab text-[10px] tracking-widest px-3 py-1.5 border border-border-m text-txt-mid hover:text-acc-amb">⚙ CONFIG</button>
+      </div>
+    </div>
+
+    <!-- PLACAR -->
+    <div id="tracker-placar">
+      <div id="placar-grid" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-2">
+          <div id="leaderboard-list" class="space-y-1"></div>
+        </div>
+        <div id="placar-sidebar" class="space-y-3"></div>
+      </div>
+    </div>
+
+    <!-- JOGOS -->
+    <div id="tracker-jogos" class="hidden">
+      <div class="flex gap-2 mb-4 flex-wrap">
+        <button id="btn-add-game" class="text-[10px] tracking-widest border border-acc-grn text-acc-grn px-3 py-1.5 hover:bg-acc-grn hover:text-bg-deep transition">+ REGISTRAR JOGO</button>
+        <div id="current-game-hint" class="text-[10px] text-txt-dim self-center"></div>
+      </div>
+      <div id="add-game-form" class="hidden mb-4 bg-bg-card border border-acc-grn/40 p-4 space-y-3"></div>
+      <div id="jogos-list" class="space-y-3"></div>
+    </div>
+
+    <!-- ESTRATÉGIA -->
+    <div id="tracker-estrategia" class="hidden">
+      <div id="estrategia-content" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    </div>
+
+    <!-- CONFIG -->
+    <div id="tracker-config" class="hidden">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <div class="text-[10px] tracking-widest text-txt-dim mb-3">PARTICIPANTES DO BOLÃO</div>
+          <div id="participants-list" class="space-y-1.5 mb-3"></div>
+          <div class="flex gap-2">
+            <input id="new-participant-name" type="text" placeholder="Nome do participante..." class="flex-1 bg-bg-card2 border border-border-m text-txt-hi text-xs px-3 py-1.5 focus:outline-none focus:border-acc-amb">
+            <button id="btn-add-participant" class="text-[10px] tracking-widest border border-acc-amb text-acc-amb px-3 py-1.5 hover:bg-acc-amb hover:text-bg-deep transition">+ ADD</button>
+          </div>
+        </div>
+        <div>
+          <div class="text-[10px] tracking-widest text-txt-dim mb-3">INFORMAÇÕES DO BOLÃO</div>
+          <div class="space-y-2 text-xs text-txt-mid">
+            <div>Total de participantes: <span id="info-total-part" class="text-txt-hi font-bold">0</span></div>
+            <div>Jogos registrados: <span id="info-total-games" class="text-txt-hi font-bold">0</span></div>
+            <div>Pontos max disponíveis: <span id="info-max-pts" class="text-txt-hi font-bold">—</span></div>
+          </div>
+          <button id="btn-reset-tracker" class="mt-4 text-[10px] tracking-widest border border-acc-red/50 text-acc-red px-3 py-1.5 hover:bg-acc-red hover:text-bg-deep transition">⚠ RESETAR TUDO</button>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<!-- MODAL: Palpites por jogo -->
+<div id="guess-modal" class="fixed inset-0 bg-black/80 z-50 hidden flex items-start justify-center pt-10 px-4">
+  <div class="bg-bg-base border border-border-m w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+    <div class="flex items-center justify-between p-4 border-b border-border-m sticky top-0 bg-bg-base z-10">
+      <div>
+        <div class="text-[10px] tracking-widest text-txt-dim">REGISTRAR PALPITES</div>
+        <div id="modal-game-title" class="font-display font-bold text-lg"></div>
+      </div>
+      <button id="btn-close-modal" class="text-txt-dim hover:text-txt-hi text-xl px-2">✕</button>
+    </div>
+    <div class="p-4">
+      <div class="grid grid-cols-2 gap-2 mb-4">
+        <div>
+          <div class="text-[10px] text-txt-dim mb-1">RESULTADO REAL</div>
+          <div class="flex items-center gap-2">
+            <input id="actual-home" type="number" min="0" max="20" placeholder="0" class="w-14 bg-bg-card border border-acc-grn text-txt-hi text-center text-lg font-bold py-2 focus:outline-none">
+            <span class="text-txt-dim">×</span>
+            <input id="actual-away" type="number" min="0" max="20" placeholder="0" class="w-14 bg-bg-card border border-acc-grn text-txt-hi text-center text-lg font-bold py-2 focus:outline-none">
+            <button id="btn-apply-actual" class="text-[10px] tracking-widest border border-acc-grn text-acc-grn px-3 py-2 hover:bg-acc-grn hover:text-bg-deep transition">✓ SALVAR</button>
+          </div>
+        </div>
+        <div id="modal-points-preview" class="bg-bg-card border border-border-l p-2 text-[10px] text-txt-dim"></div>
+      </div>
+      <div class="text-[10px] tracking-widest text-txt-dim mb-2">PALPITES DOS PARTICIPANTES</div>
+      <div id="modal-guesses-list" class="space-y-2"></div>
+      <button id="btn-save-guesses" class="mt-4 w-full text-[10px] tracking-widest border border-acc-amb text-acc-amb py-2 hover:bg-acc-amb hover:text-bg-deep transition">✓ SALVAR PALPITES</button>
+    </div>
+  </div>
+</div>
+
+<footer class="border-t border-border-l mt-12 py-4 text-center text-[10px] tracking-[0.3em] text-txt-dim">
+  BOLÃO TERMINAL v3.5 // TOURNAMENT × HEDGE × POISSON × ODDS PINNACLE // BUILD 2026.05
+  <div class="mt-1 text-[9px] text-txt-dim opacity-60">
+    ATALHOS: [P] MODO APRESENTAÇÃO • [ESC] FECHAR • [🏆] AJUSTE O MODO TORNEIO NO PAINEL ROXO
+  </div>
+</footer>
+
+<script>
+/* =============================================================
+ * BOLÃO TERMINAL :: HEDGE ENGINE v2.0 — Copa do Mundo 2026
+ * Motor: Prediction API > Team Stats > Manual | H2H + Injuries
+ * ============================================================= */
+
+/* ---------- 1. CONFIGURAÇÃO ---------- */
+/* ⚠️ SEGURANÇA: A API key NÃO fica no front.
+ *
+ * Em produção (Vercel) → todas as chamadas vão para /api/proxy
+ * que tem a chave na env var (não acessível ao navegador).
+ *
+ * Em desenvolvimento local → se precisar testar fora do Vercel,
+ * rode `vercel dev` na pasta do projeto que ele simula o proxy local. */
+const API_BASE_URL   = 'https://v3.football.api-sports.io'; // só pra referência/debug
+
+const LEAGUES = [
+  { id: 1,  season: 2026, label: 'COPA 2026',      short: '🌍 COPA 26' },
+  { id: 71, season: 2026, label: 'BRASILEIRÃO 26',  short: '🇧🇷 BRA 26' },
+  { id: 13, season: 2026, label: 'LIBERTADORES 26', short: '🏆 LIB 26' },
+  { id: 2,  season: 2025, label: 'CHAMPIONS 25/26', short: '⭐ UCL 25' },
+];
+let activeLeague = LEAGUES[0];
+let LEAGUE_ID    = activeLeague.id;
+let SEASON       = activeLeague.season;
+
+const CACHE_KEY_PREFIX = 'bolao_fixtures_';
+function getCacheKey() { return CACHE_KEY_PREFIX + LEAGUE_ID + '_' + SEASON; }
+const CACHE_TTL_MS   = 5 * 60 * 1000; // 5 min — sessionStorage
+const DEBOUNCE_MS    = 30 * 1000;      // 30 s  — evita clicks repetidos
+
+/* ---- Tabela de pontuação (editável pelo usuário) ---- */
+const POINTS_DEFAULT = {
+  exact:       30,  // placar exato
+  winnerGoals: 18,  // vencedor + gols do time
+  winnerDiff:  15,  // vencedor + saldo
+  draw:        18,  // empate
+  winnerLoser: 12,  // vencedor + gols do perdedor
+  winner:       4,  // apenas vencedor
+  oneTeam:      3,  // gols de um time certo
+};
+const POINTS_LABELS = {
+  exact:       'Placar Exato',
+  winnerGoals: 'Vencedor + gols time',
+  winnerDiff:  'Vencedor + saldo',
+  draw:        'Empate',
+  winnerLoser: 'Vencedor + gols perdedor',
+  winner:      'Apenas Vencedor',
+  oneTeam:     'Gols de um time certo',
+};
+let POINTS = loadPoints();
+
+function loadPoints() {
+  try {
+    const saved = localStorage.getItem('bolao_points');
+    if (saved) return { ...POINTS_DEFAULT, ...JSON.parse(saved) };
+  } catch (_) {}
+  return { ...POINTS_DEFAULT };
+}
+
+function savePoints() {
+  localStorage.setItem('bolao_points', JSON.stringify(POINTS));
+}
+
+/* ---- Configuração dos operadores ---- */
+/* Mude NUM_ACCOUNTS para 3 quando o 3º integrante entrar */
+const NUM_ACCOUNTS = 3;
+const ACCOUNTS = [
+  { name: 'KEVIN',     role: 'PRIMÁRIO',    borderCls: 'border-acc-grn', textCls: 'text-acc-grn', glowCls: 'glow-grn' },
+  { name: 'GABRIELLY', role: 'HEDGE',       borderCls: 'border-acc-amb', textCls: 'text-acc-amb', glowCls: '' },
+  { name: 'ZEBRA',     role: 'CISNE NEGRO', borderCls: 'border-acc-vio', textCls: 'text-acc-vio', glowCls: '' },
+];
+
+let MOCK_GAMES        = [];
+let lastFetchTime     = 0;
+let liveRefreshTimer  = null;
+let runtimeStatsCache = {}; // teamId → { gf, ga } — memória durante a sessão
+
+function loadStatsCache() {
+  try {
+    const raw = localStorage.getItem('bolao_team_stats');
+    if (raw) {
+      const { data, ts } = JSON.parse(raw);
+      if (Date.now() - ts < 24 * 60 * 60 * 1000) runtimeStatsCache = data;
+    }
+  } catch (_) {}
+}
+
+function saveStatsCache() {
+  try {
+    localStorage.setItem('bolao_team_stats', JSON.stringify({ data: runtimeStatsCache, ts: Date.now() }));
+  } catch (_) {}
+}
+
+async function fetchTeamStats(teamId) {
+  const cacheKey = `${LEAGUE_ID}_${SEASON}_${teamId}`;
+  if (runtimeStatsCache[cacheKey]) return runtimeStatsCache[cacheKey];
+
+  try {
+    const params = `league=${LEAGUE_ID}&season=${SEASON}&team=${teamId}`;
+    const res = await fetch(`/api/teams/statistics?${params}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const g = json.response?.goals;
+    if (!g) return null;
+
+    const stats = {
+      gf: parseFloat(g.for.average.total)  || 1.4,
+      ga: parseFloat(g.against.average.total) || 1.2,
+    };
+    runtimeStatsCache[cacheKey] = stats;
+    saveStatsCache();
+    return stats;
+  } catch (_) {
+    return null;
+  }
+}
+
+/* Tradução: nome da API → nome exibido */
+const NAME_MAP = {
+  'Brazil':                     'Brasil',
+  'Colombia':                   'Colômbia',
+  'Ecuador':                    'Equador',
+  'Uruguay':                    'Uruguai',
+  'Paraguay':                   'Paraguai',
+  'Bolivia':                    'Bolívia',
+  'United States':              'EUA',
+  'Mexico':                     'México',
+  'Panama':                     'Panamá',
+  'South Korea':                'Coreia do Sul',
+  'Saudi Arabia':               'Arábia Saudita',
+  'IR Iran':                    'Irã',
+  'New Zealand':                'Nova Zelândia',
+  'Ivory Coast':                'Costa do Marfim',
+  'South Africa':               'África do Sul',
+  'Morocco':                    'Marrocos',
+  'Democratic Republic of Congo': 'Congo',
+};
+
+/* Médias de gols por jogo — gf: feitos, ga: sofridos */
+const TEAM_STATS = {
+  // CONMEBOL
+  'Brasil':          { gf: 2.3, ga: 0.5 },
+  'Argentina':       { gf: 2.1, ga: 0.6 },
+  'Colômbia':        { gf: 1.8, ga: 0.8 },
+  'Equador':         { gf: 1.6, ga: 1.0 },
+  'Uruguai':         { gf: 1.5, ga: 0.9 },
+  'Paraguai':        { gf: 1.2, ga: 1.1 },
+  'Venezuela':       { gf: 1.3, ga: 1.2 },
+  'Bolívia':         { gf: 0.9, ga: 1.8 },
+  'Chile':           { gf: 1.4, ga: 1.1 },
+  'Peru':            { gf: 1.1, ga: 1.2 },
+  // UEFA
+  'France':          { gf: 2.4, ga: 0.8 },
+  'England':         { gf: 2.0, ga: 0.7 },
+  'Spain':           { gf: 1.8, ga: 0.6 },
+  'Germany':         { gf: 1.9, ga: 0.9 },
+  'Portugal':        { gf: 2.2, ga: 0.8 },
+  'Netherlands':     { gf: 1.9, ga: 0.8 },
+  'Belgium':         { gf: 1.7, ga: 0.8 },
+  'Croatia':         { gf: 1.6, ga: 0.9 },
+  'Denmark':         { gf: 1.6, ga: 0.7 },
+  'Switzerland':     { gf: 1.5, ga: 0.8 },
+  'Austria':         { gf: 1.7, ga: 0.9 },
+  'Serbia':          { gf: 1.5, ga: 1.0 },
+  'Hungary':         { gf: 1.4, ga: 1.1 },
+  'Turkey':          { gf: 1.5, ga: 1.0 },
+  'Romania':         { gf: 1.3, ga: 1.1 },
+  'Scotland':        { gf: 1.4, ga: 1.1 },
+  'Slovakia':        { gf: 1.3, ga: 1.2 },
+  'Czech Republic':  { gf: 1.4, ga: 1.1 },
+  'Ukraine':         { gf: 1.5, ga: 1.0 },
+  'Greece':          { gf: 1.2, ga: 1.0 },
+  'Slovenia':        { gf: 1.3, ga: 1.1 },
+  'Albania':         { gf: 1.2, ga: 1.2 },
+  'Poland':          { gf: 1.4, ga: 1.1 },
+  'Norway':          { gf: 1.6, ga: 1.0 },
+  'Wales':           { gf: 1.2, ga: 1.1 },
+  // CONCACAF
+  'EUA':             { gf: 1.6, ga: 0.9 },
+  'México':          { gf: 1.5, ga: 1.0 },
+  'Canada':          { gf: 1.4, ga: 1.0 },
+  'Panamá':          { gf: 1.1, ga: 1.1 },
+  'Honduras':        { gf: 1.0, ga: 1.3 },
+  'Jamaica':         { gf: 1.0, ga: 1.3 },
+  'Costa Rica':      { gf: 1.1, ga: 1.1 },
+  'El Salvador':     { gf: 0.9, ga: 1.4 },
+  // CAF
+  'Marrocos':        { gf: 1.4, ga: 0.7 },
+  'Senegal':         { gf: 1.4, ga: 0.9 },
+  'Egypt':           { gf: 1.3, ga: 0.9 },
+  'Nigeria':         { gf: 1.5, ga: 1.0 },
+  'África do Sul':   { gf: 1.2, ga: 1.1 },
+  'Costa do Marfim': { gf: 1.4, ga: 1.0 },
+  'Cameroon':        { gf: 1.3, ga: 1.1 },
+  'Algeria':         { gf: 1.3, ga: 1.0 },
+  'Tunisia':         { gf: 1.1, ga: 1.1 },
+  'Ghana':           { gf: 1.2, ga: 1.2 },
+  'Mali':            { gf: 1.2, ga: 1.0 },
+  'Congo':           { gf: 1.1, ga: 1.1 },
+  // AFC
+  'Japan':           { gf: 1.8, ga: 0.9 },
+  'Coreia do Sul':   { gf: 1.5, ga: 1.0 },
+  'Australia':       { gf: 1.4, ga: 1.0 },
+  'Irã':             { gf: 1.3, ga: 1.0 },
+  'Arábia Saudita':  { gf: 1.2, ga: 1.2 },
+  'Qatar':           { gf: 1.0, ga: 1.5 },
+  'Uzbekistan':      { gf: 1.3, ga: 1.1 },
+  'Jordan':          { gf: 1.1, ga: 1.2 },
+  'Bahrain':         { gf: 1.0, ga: 1.3 },
+  'Iraq':            { gf: 1.2, ga: 1.2 },
+  'Oman':            { gf: 1.0, ga: 1.2 },
+  // OFC
+  'Nova Zelândia':   { gf: 1.2, ga: 1.2 },
+};
+
+/* ---------- 2. INTEGRAÇÃO COM A API ---------- */
+function mapName(apiName) {
+  return NAME_MAP[apiName] || apiName;
+}
+
+function parseFixtures(partidas) {
+  return partidas.map(p => {
+    const shortStatus = p.fixture.status.short;
+    let mappedStatus = 'UPC';
+    let min = null;
+
+    if (['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE'].includes(shortStatus)) {
+      mappedStatus = 'LIVE';
+      min = p.fixture.status.elapsed ? p.fixture.status.elapsed + "'" : 'AO VIVO';
+    } else if (['FT', 'AET', 'PEN', 'CANC', 'ABD'].includes(shortStatus)) {
+      mappedStatus = 'FIN';
+      min = 'FIM';
+    }
+
+    const score = (p.goals.home !== null && p.goals.away !== null)
+      ? [p.goals.home, p.goals.away]
+      : null;
+
+    return {
+      id:      p.fixture.id,
+      home:    mapName(p.teams.home.name),
+      away:    mapName(p.teams.away.name),
+      homeId:  p.teams.home.id,
+      awayId:  p.teams.away.id,
+      kickoff: new Date(p.fixture.date).getTime(),
+      status:  mappedStatus,
+      score,
+      minute:  min,
+      round:   p.league.round || '',
+    };
+  }).sort((a, b) => {
+    const order = { LIVE: 0, UPC: 1, FIN: 2 };
+    if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
+    return a.status === 'FIN' ? b.kickoff - a.kickoff : a.kickoff - b.kickoff;
+  });
+}
+
+function scheduleAutoRefresh() {
+  clearInterval(liveRefreshTimer);
+  if (MOCK_GAMES.some(g => g.status === 'LIVE')) {
+    liveRefreshTimer = setInterval(() => fetchPartidasReais(true), 60000);
+  }
+}
+
+async function fetchPartidasReais(forceRefresh = false) {
+  const now = Date.now();
+
+  // Debounce: ignora se chamado < 30s atrás (exceto force)
+  if (!forceRefresh && now - lastFetchTime < DEBOUNCE_MS && MOCK_GAMES.length > 0) return;
+
+  // Tenta cache do sessionStorage
+  if (!forceRefresh) {
+    try {
+      const cached = sessionStorage.getItem(getCacheKey());
+      if (cached) {
+        const { data, ts } = JSON.parse(cached);
+        if (now - ts < CACHE_TTL_MS) {
+          MOCK_GAMES = data;
+          lastFetchTime = ts;
+          renderGames();
+          buildTicker();
+          scheduleAutoRefresh();
+          return;
+        }
+      }
+    } catch (_) {}
+  }
+
+  const btnRefresh = $('#btn-refresh');
+  btnRefresh.textContent = 'CARREGANDO...';
+  btnRefresh.classList.add('text-acc-amb', 'border-acc-amb');
+
+  try {
+    const params = `league=${LEAGUE_ID}&season=${SEASON}`;
+    // Proxy seguro — chave nunca exposta no front
+    const response = await fetch(`/api/fixtures?${params}`);
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const json = await response.json();
+
+    if (json.errors && Object.keys(json.errors).length > 0) {
+      throw new Error(JSON.stringify(json.errors));
+    }
+
+    const partidas = json.response;
+    if (!partidas || partidas.length === 0) {
+      $('#games-list').innerHTML = `<div class="text-center text-txt-dim text-xs py-12">Nenhum jogo retornado pela API.<br><span class="text-[10px] opacity-50">Liga ${LEAGUE_ID} · Temporada ${SEASON}</span></div>`;
+      btnRefresh.textContent = '↻ ATUALIZAR';
+      btnRefresh.classList.remove('text-acc-amb', 'border-acc-amb');
+      return;
+    }
+
+    MOCK_GAMES = parseFixtures(partidas);
+    lastFetchTime = now;
+
+    try {
+      sessionStorage.setItem(getCacheKey(), JSON.stringify({ data: MOCK_GAMES, ts: now }));
+    } catch (_) {}
+
+    renderGames();
+    buildTicker();
+    scheduleAutoRefresh();
+
+    btnRefresh.textContent = '↻ ATUALIZADO';
+    btnRefresh.classList.remove('text-acc-amb', 'border-acc-amb');
+    btnRefresh.classList.add('text-acc-grn', 'border-acc-grn');
+    setTimeout(() => {
+      btnRefresh.textContent = '↻ ATUALIZAR';
+      btnRefresh.classList.remove('text-acc-grn', 'border-acc-grn');
+    }, 3000);
+
+  } catch (error) {
+    console.error('[BOLÃO TERMINAL] Erro ao buscar partidas:', error);
+    btnRefresh.textContent = 'ERRO API';
+    btnRefresh.classList.remove('text-acc-amb', 'border-acc-amb');
+    btnRefresh.classList.add('text-acc-red', 'border-acc-red');
+
+    // Diagnóstico: tenta detectar o tipo de erro
+    let cause = '';
+    const msg = String(error?.message || error || '').toLowerCase();
+
+    if (msg.includes('load failed') || msg.includes('failed to fetch') || msg.includes('networkerror')) {
+      cause = `
+        <div class="text-acc-amb text-[11px] mt-3 mb-1 font-bold tracking-widest">PROVÁVEL CAUSA: CORS</div>
+        <div class="text-txt-mid text-[10px] leading-relaxed text-left max-w-md mx-auto">
+          Seu navegador bloqueou a chamada à API quando você abre o arquivo direto (file://).<br><br>
+          <span class="text-acc-grn font-bold">SOLUÇÃO:</span> Use um servidor local. Abra a pasta no terminal e rode:<br>
+          <code class="text-acc-cyn">cd D:\\IA\\bolao && python -m http.server 8000</code><br>
+          Depois acesse <code class="text-acc-cyn">http://localhost:8000/bolao-hedge.html</code><br><br>
+          <span class="text-txt-dim">Alternativas: extensão "Live Server" do VS Code, ou Edge/Chrome (clique direito → "Abrir com").</span>
+        </div>`;
+    } else if (msg.includes('401') || msg.includes('403') || msg.includes('unauthorized')) {
+      cause = `
+        <div class="text-acc-amb text-[11px] mt-3 mb-1 font-bold tracking-widest">PROVÁVEL CAUSA: API KEY</div>
+        <div class="text-txt-mid text-[10px]">Sua chave da API-Football foi rejeitada. Verifique no dashboard: <a href="https://dashboard.api-football.com" class="text-acc-cyn underline" target="_blank">dashboard.api-football.com</a></div>`;
+    } else if (msg.includes('429') || msg.includes('quota') || msg.includes('limit')) {
+      cause = `
+        <div class="text-acc-amb text-[11px] mt-3 mb-1 font-bold tracking-widest">PROVÁVEL CAUSA: QUOTA</div>
+        <div class="text-txt-mid text-[10px]">Você atingiu o limite diário (7500 req). Renova à meia-noite UTC.</div>`;
+    } else if (msg.includes('timeout') || msg.includes('aborted')) {
+      cause = `
+        <div class="text-acc-amb text-[11px] mt-3 mb-1 font-bold tracking-widest">PROVÁVEL CAUSA: CONEXÃO</div>
+        <div class="text-txt-mid text-[10px]">A API demorou demais pra responder. Tente o botão ATUALIZAR.</div>`;
+    } else {
+      cause = `
+        <div class="text-txt-mid text-[10px] mt-3">Tipo de erro desconhecido. Detalhes no console (F12).</div>`;
+    }
+
+    $('#games-list').innerHTML = `
+      <div class="bg-bg-card border border-acc-red p-6">
+        <div class="text-center text-acc-red text-sm font-bold mb-1">⚠ ERRO AO CARREGAR PARTIDAS</div>
+        <div class="text-center text-txt-mid text-[10px] mb-1">${error.message || 'Erro desconhecido'}</div>
+        ${cause}
+        <div class="mt-4 pt-3 border-t border-border-l flex gap-2 justify-center">
+          <button id="btn-test-api" class="text-[10px] tracking-widest border border-acc-cyn text-acc-cyn px-3 py-1.5 hover:bg-acc-cyn hover:text-bg-deep transition">🔧 TESTAR API</button>
+          <button onclick="location.reload()" class="text-[10px] tracking-widest border border-border-m text-txt-mid px-3 py-1.5 hover:border-acc-grn hover:text-acc-grn transition">↻ RECARREGAR</button>
+        </div>
+        <div id="api-test-result" class="mt-3 text-[10px] text-center text-txt-dim"></div>
+      </div>`;
+
+    // Bind do botão de teste
+    const btnTest = $('#btn-test-api');
+    if (btnTest) btnTest.addEventListener('click', testarAPI);
+
+    setTimeout(() => {
+      btnRefresh.textContent = '↻ ATUALIZAR';
+      btnRefresh.classList.remove('text-acc-red', 'border-acc-red');
+    }, 5000);
+  }
+}
+
+/* ─── Testa conexão com a API (endpoint /status não consome quota) ─── */
+async function testarAPI() {
+  const result = $('#api-test-result');
+  if (!result) return;
+  result.innerHTML = '<span class="text-acc-amb">⏳ Testando conexão...</span>';
+
+  try {
+    const res = await fetch(`/api/status`);
+
+    if (!res.ok) {
+      result.innerHTML = `<span class="text-acc-red">❌ API retornou HTTP ${res.status}</span>`;
+      return;
+    }
+
+    const json = await res.json();
+    const sub = json?.response?.subscription;
+    const req = json?.response?.requests;
+
+    if (sub && req) {
+      result.innerHTML = `
+        <span class="text-acc-grn">✓ API ONLINE</span><br>
+        <span class="text-txt-mid">Plano: ${sub.plan} • ${req.current}/${req.limit_day} requests hoje</span><br>
+        <span class="text-acc-amb text-[9px]">Se o erro continua, é CORS ou rede. Use servidor local.</span>
+      `;
+    } else {
+      result.innerHTML = `<span class="text-acc-amb">⚠ API respondeu mas sem dados de conta</span>`;
+    }
+  } catch (e) {
+    result.innerHTML = `
+      <span class="text-acc-red">❌ NÃO CONSEGUIU CONECTAR</span><br>
+      <span class="text-txt-mid">${e.message}</span><br>
+      <span class="text-acc-amb text-[9px]">Confirmado: é problema de CORS/rede do navegador. Veja a solução acima.</span>
+    `;
+  }
+}
+
+/* ---------- 3. FETCH DE INTELIGÊNCIA ---------- */
+async function apiFetch(path, params) {
+  try {
+    const r = await fetch(`/api/${path}?${params}`);
+    if (r.ok) return r.json();
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function fetchPrediction(fixtureId) {
+  try {
+    const json = await apiFetch('predictions', `fixture=${fixtureId}`);
+    return json?.response?.[0] || null;
+  } catch (_) { return null; }
+}
+
+async function fetchH2H(homeId, awayId) {
+  try {
+    const json = await apiFetch('fixtures', `h2h=${homeId}-${awayId}&last=10`);
+    return json?.response || [];
+  } catch (_) { return []; }
+}
+
+async function fetchInjuries(fixtureId) {
+  try {
+    const json = await apiFetch('injuries', `fixture=${fixtureId}`);
+    return json?.response || [];
+  } catch (_) { return []; }
+}
+
+async function fetchLineups(fixtureId) {
+  try {
+    const json = await apiFetch('fixtures/lineups', `fixture=${fixtureId}`);
+    return json?.response || [];
+  } catch (_) { return []; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * 🎰 ODDS PINNACLE — Bookmaker Intelligence
+ * ═══════════════════════════════════════════════════════════════
+ * Pinnacle (id=4) é a casa preferida de traders profissionais.
+ * Aceita apostadores experts → preços mais "justos" que Bet365 (id=8).
+ *
+ * Cobertura: odds disponíveis 1-14 dias antes do jogo.
+ * Atualização: a cada 3 horas.
+ *
+ * Fallback chain: Pinnacle → Bet365 → primeira casa disponível
+ * ═══════════════════════════════════════════════════════════════ */
+
+const BOOKMAKERS_PRIORITY = [
+  { id: 4,  name: 'Pinnacle' },
+  { id: 8,  name: 'Bet365' },
+  { id: 11, name: '1xBet' },
+];
+
+const BET_IDS = {
+  MATCH_WINNER:  1,  // 1X2
+  CORRECT_SCORE: 10, // placar exato
+  GOALS_OT_UND:  5,  // Over/Under 2.5
+};
+
+async function fetchOdds(fixtureId) {
+  try {
+    // Tenta cada bookmaker em ordem de prioridade
+    for (const bm of BOOKMAKERS_PRIORITY) {
+      const json = await apiFetch('odds', `fixture=${fixtureId}&bookmaker=${bm.id}`);
+      const data = json?.response?.[0];
+      if (data && data.bookmakers && data.bookmakers.length > 0) {
+        return {
+          bookmaker: bm,
+          raw: data.bookmakers[0],
+          fixture: data.fixture,
+        };
+      }
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/* ── Extrai 1X2 (Match Winner) das odds ── */
+function extractOdds1X2(oddsData) {
+  if (!oddsData?.raw?.bets) return null;
+  const bet = oddsData.raw.bets.find(b => b.id === BET_IDS.MATCH_WINNER || b.name === 'Match Winner');
+  if (!bet) return null;
+  const findVal = (name) => {
+    const v = bet.values.find(x => x.value === name);
+    return v ? parseFloat(v.odd) : null;
+  };
+  const homeOdd = findVal('Home');
+  const drawOdd = findVal('Draw');
+  const awayOdd = findVal('Away');
+  if (!homeOdd || !drawOdd || !awayOdd) return null;
+  return { homeOdd, drawOdd, awayOdd };
+}
+
+/* ── Converte odds 1X2 em probabilidades implícitas (remove overround) ── */
+function oddsToProbabilities1X2(odds1X2) {
+  if (!odds1X2) return null;
+  const { homeOdd, drawOdd, awayOdd } = odds1X2;
+  // Probabilidade implícita bruta (com margem da casa)
+  const pHome = 1 / homeOdd;
+  const pDraw = 1 / drawOdd;
+  const pAway = 1 / awayOdd;
+  const overround = pHome + pDraw + pAway; // típico: 1.04-1.08
+  // Normaliza removendo o overround (probabilidade "justa")
+  return {
+    home: pHome / overround,
+    draw: pDraw / overround,
+    away: pAway / overround,
+    overround: (overround - 1) * 100, // % de margem da casa
+  };
+}
+
+/* ── Extrai placares exatos com odds (Correct Score) ── */
+function extractCorrectScores(oddsData) {
+  if (!oddsData?.raw?.bets) return null;
+  const bet = oddsData.raw.bets.find(b =>
+    b.id === BET_IDS.CORRECT_SCORE || b.name === 'Correct Score' || b.name === 'Exact Score'
+  );
+  if (!bet) return null;
+
+  const scores = {};
+  let totalImplied = 0;
+  bet.values.forEach(v => {
+    // Formato típico: "1:0", "2:1", "Other Home Win", "Other Away Win", "Other Draw"
+    const match = v.value.match(/^(\d+)[\s:\-x]+(\d+)$/);
+    if (!match) return;
+    const h = parseInt(match[1]);
+    const a = parseInt(match[2]);
+    const odd = parseFloat(v.odd);
+    if (h > 4 || a > 4 || !odd) return;
+    const p = 1 / odd;
+    scores[`${h}-${a}`] = { h, a, odd, pImplied: p };
+    totalImplied += p;
+  });
+
+  // Normaliza removendo overround
+  if (totalImplied > 0) {
+    Object.values(scores).forEach(s => {
+      s.pNormalized = s.pImplied / totalImplied;
+    });
+  }
+  return scores;
+}
+
+/* ── Métrica de concordância entre Poisson e Pinnacle (1X2) ── */
+function consensusLevel(poissonProb, oddsProb) {
+  if (!oddsProb) return null;
+  // Diferença absoluta máxima entre as 3 zonas
+  const dHome = Math.abs(poissonProb.home - oddsProb.home);
+  const dDraw = Math.abs(poissonProb.draw - oddsProb.draw);
+  const dAway = Math.abs(poissonProb.away - oddsProb.away);
+  const maxDiff = Math.max(dHome, dDraw, dAway);
+
+  if (maxDiff < 0.05)      return { level: 'ALTO',     color: 'text-acc-grn', desc: 'Fontes concordam — confiança alta' };
+  else if (maxDiff < 0.12) return { level: 'MÉDIO',    color: 'text-acc-cyn', desc: 'Pequena divergência — ok' };
+  else if (maxDiff < 0.20) return { level: 'BAIXO',    color: 'text-acc-amb', desc: 'Discordância significativa — investigar' };
+  else                     return { level: 'DIVERGE',  color: 'text-acc-red', desc: 'Fontes discordam muito — oportunidade ou armadilha' };
+}
+
+async function fetchRecentForm(teamId) {
+  const cacheKey = `form_${LEAGUE_ID}_${SEASON}_${teamId}`;
+  if (runtimeStatsCache[cacheKey]) return runtimeStatsCache[cacheKey];
+  try {
+    const json = await apiFetch('fixtures', `team=${teamId}&last=5&status=FT`);
+    const games = json?.response || [];
+    if (!games.length) return null;
+    let gf = 0, ga = 0, n = 0;
+    const strip = [];
+    for (const g of games) {
+      const isHome = g.teams.home.id === teamId;
+      const scored   = isHome ? g.goals.home : g.goals.away;
+      const conceded = isHome ? g.goals.away : g.goals.home;
+      if (scored === null || conceded === null) continue;
+      gf += scored; ga += conceded; n++;
+      strip.push(scored > conceded ? 'W' : scored === conceded ? 'D' : 'L');
+    }
+    if (!n) return null;
+    const result = { gf: gf / n, ga: ga / n, strip };
+    runtimeStatsCache[cacheKey] = result;
+    saveStatsCache();
+    return result;
+  } catch (_) { return null; }
+}
+
+function calcH2H(games, homeId, awayId) {
+  let homeWins = 0, draws = 0, awayWins = 0;
+  for (const g of games) {
+    const hIsHome = g.teams.home.id === homeId;
+    const homeWon = hIsHome ? g.teams.home.winner : g.teams.away.winner;
+    const awayWon = hIsHome ? g.teams.away.winner : g.teams.home.winner;
+    if (homeWon) homeWins++;
+    else if (awayWon) awayWins++;
+    else draws++;
+  }
+  return { homeWins, draws, awayWins, total: games.length };
+}
+
+/* ---------- 4. CAMADA ESTATÍSTICA :: POISSON ---------- */
+function poissonPMF(lambda, k) {
+  let fact = 1;
+  for (let i = 2; i <= k; i++) fact *= i;
+  return (Math.pow(lambda, k) * Math.exp(-lambda)) / fact;
+}
+
+function computeLambdas(home, away) {
+  const def = { gf: 1.4, ga: 1.2 };
+  const h = TEAM_STATS[home] || def;
+  const a = TEAM_STATS[away] || def;
+  return {
+    lambdaHome: +( ((h.gf + a.ga) / 2) * 1.10 ).toFixed(2),
+    lambdaAway: +( ((a.gf + h.ga) / 2) * 0.95 ).toFixed(2),
+  };
+}
+
+function computeLambdasFull(game, prediction, h2hStats, homeStats, awayStats, injuries, homeForm, awayForm) {
+  let lambdaHome, lambdaAway, source;
+
+  // Prioridade 1: gols previstos pela própria API
+  // Validação: rejeita valores fora do intervalo plausível (API às vezes retorna 0.30 como placeholder)
+  const predH = parseFloat(prediction?.predictions?.goals?.home);
+  const predA = parseFloat(prediction?.predictions?.goals?.away);
+  const predValid = predH >= 0.5 && predA >= 0.5 && predH <= 7 && predA <= 7;
+
+  if (predValid) {
+    lambdaHome = predH;
+    lambdaAway = predA;
+    source = 'PREDIÇÃO API';
+  } else {
+    const def = { gf: 1.4, ga: 1.2 };
+    const hSeason = homeStats || TEAM_STATS[game.home] || def;
+    const aSeason = awayStats || TEAM_STATS[game.away] || def;
+
+    // Prioridade 2: forma recente (últ. 5 jogos) blend 60% recente + 40% temporada
+    if (homeForm && awayForm) {
+      const h = { gf: homeForm.gf * 0.6 + hSeason.gf * 0.4, ga: homeForm.ga * 0.6 + hSeason.ga * 0.4 };
+      const a = { gf: awayForm.gf * 0.6 + aSeason.gf * 0.4, ga: awayForm.ga * 0.6 + aSeason.ga * 0.4 };
+      lambdaHome = ((h.gf + a.ga) / 2) * 1.10;
+      lambdaAway = ((a.gf + h.ga) / 2) * 0.95;
+      source = 'FORMA RECENTE';
+    } else {
+      // Prioridade 3: stats da temporada ou estimativa
+      lambdaHome = ((hSeason.gf + aSeason.ga) / 2) * 1.10;
+      lambdaAway = ((aSeason.gf + hSeason.ga) / 2) * 0.95;
+      source = homeStats && awayStats ? 'STATS REAIS' : 'ESTIMATIVA';
+    }
+  }
+
+  // Ajuste H2H (peso 15% máximo)
+  if (h2hStats && h2hStats.total >= 3) {
+    const homeRate = h2hStats.homeWins / h2hStats.total;
+    const adj = (homeRate - 0.45) * 0.3; // ±13.5% no máximo
+    lambdaHome = lambdaHome * (1 + adj);
+    lambdaAway = lambdaAway * (1 - adj * 0.5);
+    if (h2hStats.total >= 3) source += ' + H2H';
+  }
+
+  // Penalidade por lesionados/suspensos (atacantes e meias)
+  let injHome = 0, injAway = 0;
+  for (const inj of (injuries || [])) {
+    const pos = inj.player?.pos;
+    const pen = pos === 'F' ? 0.18 : pos === 'M' ? 0.09 : 0;
+    if (inj.team?.id === game.homeId) injHome += pen;
+    else if (inj.team?.id === game.awayId) injAway += pen;
+  }
+  lambdaHome = Math.max(0.3, lambdaHome - Math.min(injHome, 0.40));
+  lambdaAway = Math.max(0.3, lambdaAway - Math.min(injAway, 0.40));
+
+  return {
+    lambdaHome: +lambdaHome.toFixed(3),
+    lambdaAway: +lambdaAway.toFixed(3),
+    source,
+    prediction,
+    h2hStats,
+    injuries,
+    homeForm,
+    awayForm,
+  };
+}
+
+function buildScoreMatrix(lambdaHome, lambdaAway, max = 4) {
+  const matrix = [];
+  for (let i = 0; i <= max; i++) {
+    const row = [];
+    for (let j = 0; j <= max; j++) {
+      row.push(poissonPMF(lambdaHome, i) * poissonPMF(lambdaAway, j));
+    }
+    matrix.push(row);
+  }
+  return matrix;
+}
+
+function aggregateOutcomes(matrix) {
+  let home = 0, draw = 0, away = 0;
+  for (let i = 0; i < matrix.length; i++) {
+    for (let j = 0; j < matrix[i].length; j++) {
+      if (i > j) home += matrix[i][j];
+      else if (i === j) draw += matrix[i][j];
+      else away += matrix[i][j];
+    }
+  }
+  return { home, draw, away };
+}
+
+/* ---------- 4. CAMADA DE ESTRATÉGIA :: HEDGE ENGINE ---------- */
+function scoreGuess(guessH, guessA, realH, realA) {
+  if (guessH === realH && guessA === realA) return POINTS.exact;
+
+  const guessWinner = guessH > guessA ? 'H' : guessH < guessA ? 'A' : 'D';
+  const realWinner  = realH  > realA  ? 'H' : realH  < realA  ? 'A' : 'D';
+
+  if (guessWinner === 'D' && realWinner === 'D') return POINTS.draw;
+
+  if (guessWinner !== realWinner) {
+    // Errou o vencedor — verifica se acertou os gols de pelo menos um time
+    if (guessH === realH || guessA === realA) return POINTS.oneTeam;
+    return 0;
+  }
+
+  const guessWinnerGoals = guessWinner === 'H' ? guessH : guessA;
+  const realWinnerGoals  = realWinner  === 'H' ? realH  : realA;
+  if (guessWinnerGoals === realWinnerGoals) return POINTS.winnerGoals;
+
+  const guessDiff = guessH - guessA;
+  const realDiff  = realH  - realA;
+  if (guessDiff === realDiff) return POINTS.winnerDiff;
+
+  const guessLoserGoals = guessWinner === 'H' ? guessA : guessH;
+  const realLoserGoals  = realWinner  === 'H' ? realA  : realH;
+  if (guessLoserGoals === realLoserGoals) return POINTS.winnerLoser;
+
+  return POINTS.winner;
+}
+
+function expectedValue(guessH, guessA, matrix) {
+  let ev = 0;
+  for (let i = 0; i < matrix.length; i++) {
+    for (let j = 0; j < matrix[i].length; j++) {
+      ev += matrix[i][j] * scoreGuess(guessH, guessA, i, j);
+    }
+  }
+  return ev;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * 🏆 TOURNAMENT ENGINE v3.0 — Estratégia para Bolão Top 3
+ * ═══════════════════════════════════════════════════════════════
+ * Filosofia:
+ *  Não maximizamos PONTOS — maximizamos chance de TOP 3.
+ *  Isso muda tudo: precisamos pontuar QUANDO A MESA ZERAR.
+ *
+ *  Kevin     → maior EV, mas EVITANDO placares populares (peso 60%)
+ *  Gabrielly → cobertura adjacente ao Kevin (peso 30%)
+ *  Zebra     → jogada anticonsensual de alto upside (peso 10%)
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* Configuração estratégica — ajustada conforme posição no ranking */
+const TOURNAMENT_CONFIG = {
+  /* Quanto a mesa palpita popularmente (calibrável conforme rodada) */
+  popularityPenalty: {
+    SAFE:        0.5,   // jogar SEGURO — pouca penalidade no popular (top da mesa)
+    BALANCED:    1.0,   // padrão                                      (meio da mesa)
+    AGGRESSIVE:  1.8,   // FUGIR do popular — quem está em 5-10º
+    DESPERATE:   2.5,   // só jogadas raras — quem está em 11º+ no fim
+  },
+  /* Quão diferente a Zebra deve ser do Kevin (mínimo de gols de distância) */
+  zebraMinDistance: { SAFE: 1, BALANCED: 2, AGGRESSIVE: 3, DESPERATE: 4 },
+  /* EV mínimo aceitável pra Zebra (não joga 4x4 sem motivo) */
+  zebraMinEV:       { SAFE: 6, BALANCED: 5, AGGRESSIVE: 4, DESPERATE: 3 },
+};
+
+/* Estado global do modo torneio (controlado pelo usuário na UI) */
+let tournamentMode = {
+  mode: 'BALANCED',          // SAFE | BALANCED | AGGRESSIVE | DESPERATE
+  myRank: null,              // 1-20 ou null se não sabe
+  totalPlayers: 12,          // jogadores atuais no bolão
+  camouflage: false,         // ativa: Zebra joga DELIBERADAMENTE mal nesse jogo
+};
+
+/* Carrega/salva config do torneio no localStorage */
+function loadTournamentMode() {
+  try {
+    const saved = localStorage.getItem('bolao_tournament_mode');
+    if (saved) Object.assign(tournamentMode, JSON.parse(saved));
+  } catch(_) {}
+}
+function saveTournamentMode() {
+  localStorage.setItem('bolao_tournament_mode', JSON.stringify(tournamentMode));
+}
+loadTournamentMode();
+
+/* ─── UI do Painel Tournament Mode ─────────────────────────── */
+
+const TOURNAMENT_ADVICE = {
+  SAFE: {
+    color: 'text-acc-grn',
+    title: '🛡️ DEFESA',
+    body: 'Jogando seguro. Kevin pega placares populares. Use quando estiver em <b>1º-3º</b> e quer manter posição.',
+  },
+  BALANCED: {
+    color: 'text-acc-cyn',
+    title: '⚖️ BALANCEADO',
+    body: 'Padrão. Mix de seguro e anticonsensual. Use quando estiver em <b>4º-7º</b> ou no início do campeonato.',
+  },
+  AGGRESSIVE: {
+    color: 'text-acc-amb',
+    title: '⚔️ ATAQUE',
+    body: 'Fuga do consenso. Zebra busca upset. Use quando estiver em <b>8º-12º</b> e precisa subir.',
+  },
+  DESPERATE: {
+    color: 'text-acc-red',
+    title: '🔥 ALL-IN',
+    body: 'Tudo na zebra. Aceita perder pontos pra ter chance de explodir. Use nas <b>últimas rodadas</b> se estiver longe do pódio.',
+  },
+};
+
+function renderTournamentAdvice() {
+  // Auto-sugere modo baseado na posição
+  const myRank = tournamentMode.myRank;
+  const total  = tournamentMode.totalPlayers;
+  let suggestion = '';
+  if (myRank && total) {
+    let recommended;
+    const tier = myRank / total;
+    if (tier <= 0.20)      recommended = 'SAFE';
+    else if (tier <= 0.45) recommended = 'BALANCED';
+    else if (tier <= 0.75) recommended = 'AGGRESSIVE';
+    else                   recommended = 'DESPERATE';
+    if (recommended !== tournamentMode.mode) {
+      suggestion = `<div class="text-[9px] text-acc-amb mt-2">💡 Sua posição sugere modo <b>${TOURNAMENT_ADVICE[recommended].title}</b></div>`;
+    }
+  }
+
+  const adv = TOURNAMENT_ADVICE[tournamentMode.mode];
+  $('#tournament-advice').innerHTML = `
+    <div class="${adv.color} font-bold text-[10px] tracking-widest mb-1">${adv.title}</div>
+    <div>${adv.body}</div>
+    ${suggestion}
+  `;
+
+  // Atualiza estado visual dos botões de modo
+  $$('.tmode-btn').forEach(b => {
+    const isActive = b.dataset.tmode === tournamentMode.mode;
+    b.classList.toggle('bg-acc-vio', isActive);
+    b.classList.toggle('text-bg-deep', isActive);
+    b.classList.toggle('font-bold', isActive);
+    b.classList.toggle('border-acc-vio', isActive);
+  });
+}
+
+function bindTournamentControls() {
+  // Modo
+  $$('.tmode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      tournamentMode.mode = btn.dataset.tmode;
+      saveTournamentMode();
+      renderTournamentAdvice();
+      // Recalcula se um jogo está selecionado
+      if (selectedGameId) {
+        const g = MOCK_GAMES.find(x => x.id === selectedGameId);
+        if (g) selectGame(selectedGameId);
+      }
+    });
+  });
+
+  // Posição
+  const rankInput = $('#input-my-rank');
+  if (rankInput) {
+    if (tournamentMode.myRank) rankInput.value = tournamentMode.myRank;
+    rankInput.addEventListener('change', (e) => {
+      tournamentMode.myRank = parseInt(e.target.value) || null;
+      saveTournamentMode();
+      renderTournamentAdvice();
+    });
+  }
+
+  // Total
+  const totalInput = $('#input-total-players');
+  if (totalInput) {
+    totalInput.value = tournamentMode.totalPlayers;
+    totalInput.addEventListener('change', (e) => {
+      tournamentMode.totalPlayers = parseInt(e.target.value) || 12;
+      saveTournamentMode();
+      renderTournamentAdvice();
+    });
+  }
+
+  // Camuflagem
+  const camCheckbox = $('#input-camouflage');
+  if (camCheckbox) {
+    camCheckbox.checked = tournamentMode.camouflage;
+    camCheckbox.addEventListener('change', (e) => {
+      tournamentMode.camouflage = e.target.checked;
+      saveTournamentMode();
+      if (selectedGameId) {
+        selectGame(selectedGameId);
+      }
+    });
+  }
+
+  // Help button
+  const helpBtn = $('#btn-tournament-help');
+  if (helpBtn) {
+    helpBtn.addEventListener('click', showTournamentHelp);
+  }
+
+  renderTournamentAdvice();
+}
+
+function showTournamentHelp() {
+  const html = `
+    <div style="position:fixed;inset:0;background:rgba(8,9,11,.85);backdrop-filter:blur(8px);z-index:150;display:flex;align-items:center;justify-content:center;padding:1rem;" id="help-modal">
+      <div style="background:#12151b;border:1px solid #8b5cf6;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;padding:1.5rem;font-family:'JetBrains Mono',monospace;font-size:13px;color:#e6eaf2;line-height:1.6;">
+        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:1rem;">
+          <h3 style="font-family:'Space Grotesk';font-weight:700;font-size:1.3rem;color:#8b5cf6;">🏆 Como funciona o Modo Torneio</h3>
+          <button onclick="document.getElementById('help-modal').remove()" style="color:#ff3d57;font-size:1.5rem;background:none;border:none;cursor:pointer;">✕</button>
+        </div>
+        <div style="color:#8b94a8;">
+          <p style="margin-bottom:1rem;"><b style="color:#e6eaf2;">A filosofia:</b> Bolão não é jogo de probabilidade, é jogo de RANKING. Você não quer maximizar pontos — quer maximizar chance de Top 3. Por isso o sistema penaliza placares populares (que TODA a mesa vai jogar).</p>
+
+          <p style="color:#00d68f;font-weight:700;margin-bottom:.3rem;">🛡️ DEFESA</p>
+          <p style="margin-bottom:.8rem;">Kevin joga consensual. Cobertura máxima. Use quando você JÁ está no pódio e quer defender posição.</p>
+
+          <p style="color:#00c2ff;font-weight:700;margin-bottom:.3rem;">⚖️ BALANCEADO</p>
+          <p style="margin-bottom:.8rem;">Padrão. Penaliza placares óbvios moderadamente. Bom pro início e meio de campeonato.</p>
+
+          <p style="color:#ffb547;font-weight:700;margin-bottom:.3rem;">⚔️ ATAQUE</p>
+          <p style="margin-bottom:.8rem;">Foge do palpite popular. Kevin pega placares semi-óbvios, Zebra busca upset real. Use quando precisa subir do meio da tabela.</p>
+
+          <p style="color:#ff3d57;font-weight:700;margin-bottom:.3rem;">🔥 ALL-IN</p>
+          <p style="margin-bottom:.8rem;">Apenas placares anticonsensuais. Aceita zerar rodadas em troca de UMA explosão. Reserve pras últimas rodadas se estiver longe do pódio.</p>
+
+          <hr style="border-color:#2a3140;margin:1rem 0;">
+
+          <p style="color:#ffb547;font-weight:700;margin-bottom:.3rem;">🎭 Camuflagem Zebra</p>
+          <p style="margin-bottom:.8rem;">Ative em 1-2 jogos por rodada. A Zebra vai jogar um placar popular mas "errado de propósito" — parece um amigo qualquer que chutou. Útil pra não chamar atenção de que você tem sistema.</p>
+
+          <p style="color:#8b5cf6;font-weight:700;margin-bottom:.3rem;">💡 Dica de ouro</p>
+          <p>Em mesa de 12-20, o palpite popular concentra muito. Se você acerta 2x0 num jogo onde 8 pessoas também acertaram, você ganhou 30 pts mas só 5 pts de RANKING. Se acerta 2x1 onde só você acertou, ganhou 30 pts E 25 pts de ranking. <b style="color:#e6eaf2;">É isso que o motor tá otimizando.</b></p>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+/* ─── MODELO DE PALPITE POPULAR ──────────────────────────────
+ * Estima P(palpite_popular = (h,a)) — qual placar o jogador médio chuta.
+ * Heurísticas baseadas em padrões empíricos de mesa de 10-20 jogadores:
+ *  1. Pessoas adoram placares "redondos": 1-0, 2-0, 2-1, 1-1, 3-1
+ *  2. Pessoas hipervalorizam o favorito (chutam +1 gol acima do λ)
+ *  3. Pessoas SUBESTIMAM empates de placar alto (2-2, 3-3 quase ninguém joga)
+ *  4. Pessoas RARAMENTE chutam goleadas (4-0, 5-0)
+ *  5. Pessoas RARAMENTE chutam vitória do azarão por margem
+ * ─────────────────────────────────────────────────────────── */
+function popularPalpiteWeight(h, a, lambdaHome, lambdaAway) {
+  const diff = h - a;
+  const total = h + a;
+  const favoriteIsHome = lambdaHome > lambdaAway;
+  const favIsBy = Math.abs(lambdaHome - lambdaAway);
+
+  let weight = 1.0;
+
+  /* 1. Bônus para placares "templates" populares */
+  const templates = ['1-0','2-0','2-1','1-1','3-1','3-0','0-0','0-1','1-2','0-2'];
+  if (templates.includes(`${h}-${a}`)) weight *= 2.2;
+
+  /* 2. Pessoas chutam pro lado do favorito */
+  if (favoriteIsHome && diff > 0) weight *= 1.6;
+  else if (!favoriteIsHome && diff < 0) weight *= 1.6;
+
+  /* 3. Diferença popular: 1 ou 2 gols */
+  if (Math.abs(diff) === 1) weight *= 1.4;
+  else if (Math.abs(diff) === 2) weight *= 1.2;
+  else if (Math.abs(diff) >= 4) weight *= 0.15;  // ninguém chuta goleada
+
+  /* 4. Empates de placar alto: ninguém joga */
+  if (h === a && total >= 4) weight *= 0.1;
+  if (h === a && total === 3) weight *= 0.2; // tipo 1.5-1.5 (impossível)
+
+  /* 5. Total de gols popular: 2-4 */
+  if (total >= 2 && total <= 4) weight *= 1.3;
+  else if (total === 0) weight *= 0.5;
+  else if (total >= 6) weight *= 0.1;
+
+  /* 6. Em jogo muito desigual, ninguém aposta na zebra */
+  if (favIsBy > 0.8) {
+    if (favoriteIsHome && diff < 0) weight *= 0.2;   // ninguém aposta zebra
+    if (!favoriteIsHome && diff > 0) weight *= 0.2;
+  }
+
+  return weight;
+}
+
+/**
+ * Constrói distribuição normalizada de palpites populares.
+ * Retorna matriz P_popular[i][j] = probabilidade do jogador médio chutar (i,j).
+ */
+function buildPopularityMatrix(matrix, lambdaHome, lambdaAway) {
+  const size = matrix.length;
+  const pop = [];
+  let total = 0;
+  for (let i = 0; i < size; i++) {
+    const row = [];
+    for (let j = 0; j < size; j++) {
+      // Palpite popular = Poisson amplificado pelos vieses humanos
+      const w = matrix[i][j] * popularPalpiteWeight(i, j, lambdaHome, lambdaAway);
+      row.push(w);
+      total += w;
+    }
+    pop.push(row);
+  }
+  // Normaliza pra somar 1
+  for (let i = 0; i < size; i++)
+    for (let j = 0; j < size; j++)
+      pop[i][j] /= total;
+  return pop;
+}
+
+/**
+ * Top palpites populares (pra mostrar na UI "o que a mesa vai jogar").
+ */
+function topPopularPalpites(popMatrix, n = 5) {
+  const all = [];
+  for (let i = 0; i < popMatrix.length; i++)
+    for (let j = 0; j < popMatrix[i].length; j++)
+      all.push({ h: i, a: j, popularity: popMatrix[i][j] });
+  return all.sort((x, y) => y.popularity - x.popularity).slice(0, n);
+}
+
+/**
+ * Distância entre dois palpites (gols).
+ * Usado pra forçar diversificação entre Kevin / Gabrielly / Zebra.
+ */
+function palpiteDistance(p1, p2) {
+  return Math.abs(p1.h - p2.h) + Math.abs(p1.a - p2.a);
+}
+
+/* ─── TOURNAMENT-AWARE EV ────────────────────────────────────
+ * EV ajustado por popularidade: penaliza placares que TODO MUNDO vai jogar.
+ *
+ * Lógica:
+ *   tournament_EV(h,a) = EV_bruto(h,a) × (1 - popularidade(h,a))^penalty
+ *
+ * Quanto mais popular o placar, mais o EV é descontado — porque mesmo
+ * acertando, você empata com 5 outros e não sobe no ranking.
+ * ─────────────────────────────────────────────────────────── */
+function tournamentEV(h, a, matrix, popMatrix, penalty) {
+  const baseEV = expectedValue(h, a, matrix);
+  const popularity = popMatrix[h][a];
+  // Penalidade: quanto + popular, menor o EV ajustado
+  const adjustment = Math.pow(1 - popularity, penalty * 5);
+  return baseEV * adjustment;
+}
+
+/**
+ * Zona (Home/Draw/Away) de um palpite.
+ */
+function palpiteZone(h, a) {
+  if (h > a) return 'home';
+  if (h < a) return 'away';
+  return 'draw';
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * 🎯 ESTRATÉGIA PRINCIPAL — pickTournamentPalpites
+ * ═══════════════════════════════════════════════════════════════
+ * Retorna 3 palpites otimizados PRO TORNEIO (não pro jogo isolado):
+ *
+ *  KEVIN     → maior tournament_EV entre placares com popularidade < 70º percentil
+ *  GABRIELLY → segundo maior tournament_EV, com distância >= 1 do Kevin
+ *  ZEBRA     → palpite anticonsensual de alto upside (zona DIFERENTE + popularidade < 50º)
+ *
+ *  Se modo camuflado: Zebra joga placar deliberadamente "amador" (média alta da mesa
+ *  mas com 1 gol "errado") pra parecer humano comum.
+ * ═══════════════════════════════════════════════════════════════ */
+function pickTournamentPalpites(matrix, lambdaHome, lambdaAway) {
+  const mode = tournamentMode.mode;
+  const penalty = TOURNAMENT_CONFIG.popularityPenalty[mode];
+  const zebraMinDist = TOURNAMENT_CONFIG.zebraMinDistance[mode];
+  const zebraMinEV   = TOURNAMENT_CONFIG.zebraMinEV[mode];
+
+  const popMatrix = buildPopularityMatrix(matrix, lambdaHome, lambdaAway);
+
+  // Lista todos os candidatos com métricas
+  const candidates = [];
+  for (let i = 0; i < matrix.length; i++) {
+    for (let j = 0; j < matrix[i].length; j++) {
+      candidates.push({
+        h: i,
+        a: j,
+        prob: matrix[i][j],
+        popularity: popMatrix[i][j],
+        ev: expectedValue(i, j, matrix),
+        tev: tournamentEV(i, j, matrix, popMatrix, penalty),
+        zone: palpiteZone(i, j),
+      });
+    }
+  }
+
+  /* ── KEVIN: maior tournament EV ─────────────────────────── */
+  const kevinPool = candidates
+    .filter(c => c.prob > 0.02)         // não escolher placares quase impossíveis
+    .sort((a, b) => b.tev - a.tev);
+  const kevin = kevinPool[0];
+
+  /* ── GABRIELLY: cobertura adjacente ─────────────────────── */
+  // Quer: zona pode ser igual (pra "abraçar" o Kevin), mas com distância 1-2
+  const gabriellyPool = candidates
+    .filter(c => !(c.h === kevin.h && c.a === kevin.a))
+    .filter(c => palpiteDistance(c, kevin) >= 1 && palpiteDistance(c, kevin) <= 3)
+    .filter(c => c.prob > 0.015)
+    .sort((a, b) => b.tev - a.tev);
+  const gabrielly = gabriellyPool[0] || candidates.filter(c =>
+    !(c.h === kevin.h && c.a === kevin.a)
+  ).sort((a,b) => b.tev - a.tev)[0];
+
+  /* ── ZEBRA: anticonsensual de alto upside OU camuflada ─── */
+  let zebra;
+
+  if (tournamentMode.camouflage) {
+    // CAMUFLAGEM: joga um placar popular MAS errado (parece amador)
+    // Estratégia: pega um placar do top popular mas que NÃO é o que Kevin/Gabi pegaram
+    const popular = topPopularPalpites(popMatrix, 8);
+    zebra = popular.find(p =>
+      !(p.h === kevin.h && p.a === kevin.a) &&
+      !(p.h === gabrielly.h && p.a === gabrielly.a)
+    );
+    // Adiciona métricas (não veio do candidates)
+    if (zebra) {
+      const c = candidates.find(x => x.h === zebra.h && x.a === zebra.a);
+      zebra = c;
+    }
+  } else {
+    // ZEBRA REAL: placar diferente, alto EV mas baixa popularidade
+    const usedZones = new Set([kevin.zone, gabrielly.zone]);
+    let zebraPool = candidates
+      .filter(c => !(c.h === kevin.h && c.a === kevin.a))
+      .filter(c => !(c.h === gabrielly.h && c.a === gabrielly.a))
+      .filter(c => palpiteDistance(c, kevin) >= zebraMinDist)
+      .filter(c => c.ev >= zebraMinEV);
+
+    // Tenta zona diferente das outras duas
+    const differentZone = zebraPool.filter(c => !usedZones.has(c.zone));
+    const useThisPool = differentZone.length > 0 ? differentZone : zebraPool;
+
+    // Critério: alto EV, baixa popularidade (anticonsensual)
+    // Score = EV × (1 - popularidade)²
+    zebra = useThisPool
+      .map(c => ({ ...c, antiConsensus: c.ev * Math.pow(1 - c.popularity, 2) }))
+      .sort((a, b) => b.antiConsensus - a.antiConsensus)[0];
+
+    // Fallback se tudo deu ruim
+    if (!zebra) {
+      zebra = candidates
+        .filter(c => !(c.h === kevin.h && c.a === kevin.a))
+        .filter(c => !(c.h === gabrielly.h && c.a === gabrielly.a))
+        .sort((a, b) => b.ev - a.ev)[0];
+    }
+  }
+
+  return { kevin, gabrielly, zebra, popMatrix };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * FUNÇÃO COMPATIBILITY com a API antiga (renderHedge espera)
+ * ═══════════════════════════════════════════════════════════════ */
+function computeHedgeStrategy(matrix, numAccounts = 2) {
+  // Precisa dos lambdas — busca via game atualmente selecionado se possível
+  let lambdaHome = 1.3, lambdaAway = 1.1;
+  if (selectedGameId && typeof MOCK_GAMES !== 'undefined') {
+    const g = MOCK_GAMES.find(x => x.id === selectedGameId);
+    if (g) {
+      const L = computeLambdas(g.home, g.away);
+      lambdaHome = L.lambdaHome;
+      lambdaAway = L.lambdaAway;
+    }
+  }
+
+  const { kevin, gabrielly, zebra, popMatrix } = pickTournamentPalpites(matrix, lambdaHome, lambdaAway);
+
+  const chosenAll = [kevin, gabrielly, zebra].filter(Boolean);
+  const chosen = chosenAll.slice(0, numAccounts);
+
+  // Zonas (mantém compat com código antigo)
+  const candidates = [];
+  for (let i = 0; i < matrix.length; i++)
+    for (let j = 0; j < matrix[i].length; j++)
+      candidates.push({ h: i, a: j, prob: matrix[i][j] });
+
+  const zoneProb = {
+    home: candidates.filter(c => c.h > c.a).reduce((s,c) => s+c.prob, 0),
+    draw: candidates.filter(c => c.h === c.a).reduce((s,c) => s+c.prob, 0),
+    away: candidates.filter(c => c.h < c.a).reduce((s,c) => s+c.prob, 0),
+  };
+
+  // EV conjunto real
+  let combinedEV = 0;
+  for (let i = 0; i < matrix.length; i++)
+    for (let j = 0; j < matrix[i].length; j++) {
+      const best = Math.max(...chosen.map(ch => scoreGuess(ch.h, ch.a, i, j)));
+      combinedEV += matrix[i][j] * best;
+    }
+
+  return { accounts: chosen, combinedEV, zoneProb, popMatrix };
+}
+
+/* ---------- 5. CAMADA DE UI ---------- */
+let currentFilter = 'ALL';
+let currentDateFilter = 'ANY';
+let selectedGameId = null;
+
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+/* Checa se um jogo (do MOCK_GAMES) já tem palpite registrado no tracker */
+function gameHasGuesses(game) {
+  if (typeof trackerData === 'undefined' || !trackerData.games) return false;
+  // games no tracker têm um campo `apiId` (ou bate por home+away+kickoff)
+  return trackerData.games.some(tg =>
+    tg.apiId === game.id ||
+    (tg.home === game.home && tg.away === game.away && Math.abs((tg.kickoff || 0) - (game.kickoff || 0)) < 6 * 3600 * 1000)
+  );
+}
+
+function passesDateFilter(g) {
+  if (currentDateFilter === 'ANY') return true;
+  const now = Date.now();
+  const dayMs = 24 * 3600 * 1000;
+  if (currentDateFilter === 'TODAY') {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
+    return g.kickoff >= today.getTime() && g.kickoff < tomorrow.getTime();
+  }
+  if (currentDateFilter === 'WEEK') {
+    return g.kickoff >= now - dayMs && g.kickoff <= now + 7 * dayMs;
+  }
+  return true;
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+function formatDate(ts) {
+  const d = new Date(ts);
+  const today = new Date();
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  if (d.toDateString() === today.toDateString())    return 'HOJE';
+  if (d.toDateString() === tomorrow.toDateString()) return 'AMANHÃ';
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
+function renderGames() {
+  const list = $('#games-list');
+  const filtered = MOCK_GAMES
+    .filter(g => currentFilter === 'ALL' ? true : g.status === currentFilter)
+    .filter(passesDateFilter);
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="text-center text-txt-dim text-xs py-12">Nenhum jogo neste filtro.</div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(g => {
+    const isLive = g.status === 'LIVE';
+    const isFin  = g.status === 'FIN';
+    const selected = g.id === selectedGameId ? 'selected' : '';
+    const hasGuess = gameHasGuesses(g) ? 'has-guesses' : '';
+    const statusBadge = isLive
+      ? `<div class="flex items-center gap-1.5 text-acc-red"><span class="w-1.5 h-1.5 rounded-full bg-acc-red blink"></span><span class="text-[10px] font-bold tracking-widest">AO VIVO • ${g.minute}</span></div>`
+      : isFin
+      ? `<span class="text-[10px] tracking-widest text-txt-dim">FINALIZADO</span>`
+      : `<span class="text-[10px] tracking-widest text-acc-cyn">${formatDate(g.kickoff)} • ${formatTime(g.kickoff)}</span>`;
+
+    const scoreDisplay = g.score
+      ? `<div class="font-display font-bold text-2xl tabular-nums ${isLive ? 'text-acc-red' : 'text-txt-hi'}">${g.score[0]} <span class="text-txt-dim">:</span> ${g.score[1]}</div>`
+      : `<div class="font-mono text-xs text-txt-dim tracking-widest">VS</div>`;
+
+    // Calcula Lambda só pra mostrar no card
+    const lambdas = computeLambdas(g.home, g.away);
+
+    return `
+    <div class="game-card ${selected} ${hasGuess} bg-bg-card border border-border-l p-4 cursor-pointer" data-game="${g.id}">
+      <div class="flex items-center justify-between mb-3">
+        ${statusBadge}
+        <span class="text-[10px] text-txt-dim">#${String(g.id).padStart(3,'0')}</span>
+      </div>
+      <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div class="text-right">
+          <div class="font-display font-semibold text-sm truncate max-w-[100px] float-right">${g.home}</div>
+          <div class="clear-both"></div>
+          <div class="text-[10px] text-txt-dim mt-0.5">λ ${lambdas.lambdaHome.toFixed(2)}</div>
+        </div>
+        <div class="px-3 py-1.5 border-x border-border-l min-w-[70px] text-center">
+          ${scoreDisplay}
+        </div>
+        <div class="text-left">
+          <div class="font-display font-semibold text-sm truncate max-w-[100px]">${g.away}</div>
+          <div class="text-[10px] text-txt-dim mt-0.5">λ ${lambdas.lambdaAway.toFixed(2)}</div>
+        </div>
+      </div>
+      ${!isFin ? `<div class="mt-3 pt-3 border-t border-border-l flex justify-between text-[10px] text-txt-dim tracking-widest">
+        <span>CLIQUE PARA ANALISAR</span>
+        <span class="text-acc-cyn">→ POISSON</span>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+
+  $$('.game-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const id = parseInt(card.dataset.game);
+      selectGame(id);
+    });
+  });
+}
+
+async function selectGame(id) {
+  selectedGameId = id;
+  const game = MOCK_GAMES.find(g => g.id === id);
+  renderGames();
+
+  $('#matrix-status').innerHTML = `<span class="text-acc-amb">● ANALISANDO...</span>`;
+  $('#matrix-empty').classList.add('hidden');
+  $('#matrix-content').classList.remove('hidden');
+  $('#matrix-content').innerHTML = `
+    <div class="h-[400px] flex flex-col items-center justify-center gap-3 text-txt-dim text-xs tracking-widest">
+      <div class="w-8 h-8 border-2 border-acc-cyn border-t-transparent rounded-full animate-spin"></div>
+      CARREGANDO INTELIGÊNCIA DO JOGO...
+    </div>`;
+  $('#hedge-empty').classList.add('hidden');
+  $('#hedge-content').classList.remove('hidden');
+  $('#hedge-content').innerHTML = '';
+
+  // Busca tudo em paralelo — prediction é prioridade máxima
+  const [prediction, h2hGames, injuries, homeStats, awayStats, homeForm, awayForm, lineups, oddsData] = await Promise.all([
+    fetchPrediction(game.id),
+    fetchH2H(game.homeId, game.awayId),
+    fetchInjuries(game.id),
+    fetchTeamStats(game.homeId),
+    fetchTeamStats(game.awayId),
+    fetchRecentForm(game.homeId),
+    fetchRecentForm(game.awayId),
+    fetchLineups(game.id),
+    fetchOdds(game.id),
+  ]);
+
+  const h2hStats = h2hGames.length ? calcH2H(h2hGames, game.homeId, game.awayId) : null;
+  const lambdaData = computeLambdasFull(game, prediction, h2hStats, homeStats, awayStats, injuries, homeForm, awayForm);
+
+  // Processa odds (se disponível)
+  const odds1X2 = extractOdds1X2(oddsData);
+  const oddsProb = oddsToProbabilities1X2(odds1X2);
+  const correctScores = extractCorrectScores(oddsData);
+  const oddsBundle = oddsData ? {
+    bookmaker: oddsData.bookmaker,
+    odds1X2,
+    oddsProb,
+    correctScores,
+  } : null;
+
+  // Anexa ao lambdaData pra uso nas renderizações
+  lambdaData.oddsBundle = oddsBundle;
+
+  renderMatrix(game, lambdaData, lineups);
+  renderDiagnostico(game, lambdaData, lineups, h2hGames);
+  renderHedge(game, lambdaData);
+
+  if (window.innerWidth < 1024) {
+    setTimeout(() => {
+      document.querySelector('#matrix-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  }
+}
+
+function renderMatrix(game, lambdaData) {
+  const { lambdaHome, lambdaAway, source, prediction, h2hStats, injuries, homeForm, awayForm } = lambdaData;
+  const matrix   = buildScoreMatrix(lambdaHome, lambdaAway, 6);
+  const outcomes = aggregateOutcomes(matrix);
+
+  const flat = [];
+  for (let i = 0; i < matrix.length; i++)
+    for (let j = 0; j < matrix[i].length; j++)
+      flat.push({ h:i, a:j, p: matrix[i][j] });
+  flat.sort((a,b) => b.p - a.p);
+  const top5 = flat.slice(0, 5);
+  const maxP = Math.max(...flat.map(x => x.p));
+
+  const heatCellColor = (p) => {
+    const t = p / maxP;
+    return `rgb(${Math.round(18*(1-t))}, ${Math.round(21 + 193*t)}, ${Math.round(27 + 116*t)})`;
+  };
+
+  // Painel de inteligência
+  const pred = prediction?.predictions;
+  const apiWinner = pred?.winner?.name || '—';
+  const apiComment = pred?.winner?.comment || '';
+  const apiPercH = pred?.percent?.home || '—';
+  const apiPercD = pred?.percent?.draws || '—';
+  const apiPercA = pred?.percent?.away || '—';
+
+  const h2hHTML = h2hStats && h2hStats.total >= 3 ? `
+    <div class="bg-bg-card2 border border-border-l p-3">
+      <div class="text-[10px] tracking-widest text-txt-dim mb-2">H2H — ÚLTIMOS ${h2hStats.total}</div>
+      <div class="flex gap-2 text-center">
+        <div class="flex-1"><div class="font-bold text-acc-grn tabular-nums">${h2hStats.homeWins}</div><div class="text-[9px] text-txt-dim">CASA</div></div>
+        <div class="flex-1"><div class="font-bold text-acc-amb tabular-nums">${h2hStats.draws}</div><div class="text-[9px] text-txt-dim">EMP</div></div>
+        <div class="flex-1"><div class="font-bold text-acc-red tabular-nums">${h2hStats.awayWins}</div><div class="text-[9px] text-txt-dim">FORA</div></div>
+      </div>
+    </div>` : '';
+
+  const injList = (injuries || []).slice(0, 4);
+  const injHTML = injList.length ? `
+    <div class="bg-bg-card2 border border-acc-red/30 p-3">
+      <div class="text-[10px] tracking-widest text-acc-red mb-2">⚠ BAIXAS / SUSPENSOS</div>
+      <div class="space-y-1">
+        ${injList.map(inj => `
+          <div class="flex justify-between text-[10px]">
+            <span class="text-txt-mid truncate">${inj.player?.name || '?'}</span>
+            <span class="text-txt-dim ml-2 flex-shrink-0">${inj.player?.reason || inj.player?.type || '—'}</span>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  const intelHTML = pred ? `
+    <div class="mb-5 p-3 bg-bg-card2 border border-acc-vio/40">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-[10px] tracking-widest text-acc-vio">◈ PREDIÇÃO OFICIAL API</div>
+        <div class="text-[10px] text-acc-vio">${source}</div>
+      </div>
+      <div class="flex items-center gap-2 mb-2">
+        <span class="font-display font-bold text-sm text-txt-hi">${apiWinner}</span>
+        ${apiComment ? `<span class="text-[10px] text-txt-dim">· ${apiComment}</span>` : ''}
+      </div>
+      <div class="flex gap-3 text-[10px] tabular-nums">
+        <span class="text-acc-grn">${apiPercH} casa</span>
+        <span class="text-acc-amb">${apiPercD} emp</span>
+        <span class="text-acc-red">${apiPercA} fora</span>
+      </div>
+    </div>` : `
+    <div class="mb-5 p-3 bg-bg-card2 border border-border-l flex items-center justify-between">
+      <div class="text-[10px] text-txt-dim">FONTE DOS DADOS</div>
+      <div class="text-[10px] text-acc-amb">${source}</div>
+    </div>`;
+
+  const formBadge = (r) => {
+    if (r === 'W') return `<span class="px-1 py-0.5 text-[9px] font-bold bg-acc-grn/20 text-acc-grn border border-acc-grn/40">W</span>`;
+    if (r === 'D') return `<span class="px-1 py-0.5 text-[9px] font-bold bg-acc-amb/20 text-acc-amb border border-acc-amb/40">D</span>`;
+    return `<span class="px-1 py-0.5 text-[9px] font-bold bg-acc-red/20 text-acc-red border border-acc-red/40">L</span>`;
+  };
+
+  const formHTML = (homeForm || awayForm) ? `
+    <div class="mb-3 p-3 bg-bg-card2 border border-border-l">
+      <div class="text-[10px] tracking-widest text-txt-dim mb-2">FORMA RECENTE (ÚLT. 5 JOGOS)</div>
+      <div class="space-y-1.5">
+        ${homeForm ? `<div class="flex items-center justify-between">
+          <span class="text-[10px] text-txt-mid truncate w-24">${game.home}</span>
+          <div class="flex gap-1">${homeForm.strip.map(formBadge).join('')}</div>
+          <span class="text-[10px] text-txt-dim tabular-nums">${homeForm.gf.toFixed(1)}g/${homeForm.ga.toFixed(1)}s</span>
+        </div>` : ''}
+        ${awayForm ? `<div class="flex items-center justify-between">
+          <span class="text-[10px] text-txt-mid truncate w-24">${game.away}</span>
+          <div class="flex gap-1">${awayForm.strip.map(formBadge).join('')}</div>
+          <span class="text-[10px] text-txt-dim tabular-nums">${awayForm.gf.toFixed(1)}g/${awayForm.ga.toFixed(1)}s</span>
+        </div>` : ''}
+      </div>
+    </div>` : '';
+
+  const matrixHTML = intelHTML + formHTML + `
+    <div class="grid grid-cols-2 gap-2 mb-3">
+      ${h2hHTML}
+      ${injHTML}
+    </div>
+
+    <div class="grid grid-cols-3 gap-3 mb-5">
+      <div class="bg-bg-card2 border border-border-l p-3">
+        <div class="text-[10px] tracking-widest text-txt-dim">λ HOME</div>
+        <div class="font-display font-bold text-2xl text-acc-grn tabular-nums">${lambdaHome.toFixed(2)}</div>
+        <div class="text-[10px] text-txt-mid mt-1 truncate">${game.home}</div>
+      </div>
+      <div class="bg-bg-card2 border border-border-l p-3">
+        <div class="text-[10px] tracking-widest text-txt-dim">λ AWAY</div>
+        <div class="font-display font-bold text-2xl text-acc-amb tabular-nums">${lambdaAway.toFixed(2)}</div>
+        <div class="text-[10px] text-txt-mid mt-1 truncate">${game.away}</div>
+      </div>
+      <div class="bg-bg-card2 border border-border-l p-3">
+        <div class="text-[10px] tracking-widest text-txt-dim">TOTAL</div>
+        <div class="font-display font-bold text-2xl text-acc-cyn tabular-nums">${(lambdaHome+lambdaAway).toFixed(2)}</div>
+        <div class="text-[10px] text-txt-dim mt-1">gols/jogo</div>
+      </div>
+    </div>
+
+    ${(() => {
+      // ═══ PAINEL DE CONSENSO MULTI-FONTE ═══
+      const poissonProb = { home: outcomes.home, draw: outcomes.draw, away: outcomes.away };
+      const apiPred = lambdaData.prediction?.predictions?.percent;
+      const apiProb = apiPred ? {
+        home: parseInt(apiPred.home) / 100,
+        draw: parseInt(apiPred.draw) / 100,
+        away: parseInt(apiPred.away) / 100,
+      } : null;
+      const oddsB = lambdaData.oddsBundle;
+      const oddsP = oddsB?.oddsProb;
+
+      const consensus = oddsP ? consensusLevel(poissonProb, oddsP) : null;
+      const sourceCount = 1 + (apiProb ? 1 : 0) + (oddsP ? 1 : 0);
+
+      const pct = v => (v * 100).toFixed(0);
+      const row = (label, color, key) => {
+        const pVal = poissonProb[key];
+        const aVal = apiProb ? apiProb[key] : null;
+        const oVal = oddsP ? oddsP[key] : null;
+        // Detecta a maior das 3 — marca com ★
+        const vals = [pVal, aVal, oVal].filter(v => v != null);
+        const maxV = Math.max(...vals);
+        const isFav = pVal === maxV;
+        return `
+          <div class="grid grid-cols-4 gap-1 text-[10px] tabular-nums py-1 border-b border-border-l/40">
+            <div class="${color} font-bold tracking-widest">${label}</div>
+            <div class="text-center ${isFav ? 'text-txt-hi font-bold' : 'text-txt-mid'}">${pct(pVal)}%</div>
+            <div class="text-center ${aVal === maxV ? 'text-txt-hi font-bold' : 'text-txt-mid'}">${aVal != null ? pct(aVal)+'%' : '<span class="text-txt-dim">—</span>'}</div>
+            <div class="text-center ${oVal === maxV ? 'text-txt-hi font-bold' : 'text-txt-mid'}">${oVal != null ? pct(oVal)+'%' : '<span class="text-txt-dim">—</span>'}</div>
+          </div>`;
+      };
+
+      const bookmakerLabel = oddsB
+        ? `<span class="text-acc-vio">${oddsB.bookmaker.name.toUpperCase()}</span>${oddsB.oddsProb ? ` <span class="text-txt-dim text-[9px]">(margem ${oddsB.oddsProb.overround.toFixed(1)}%)</span>` : ''}`
+        : `<span class="text-txt-dim">SEM ODDS</span>`;
+
+      const consensusBadge = consensus
+        ? `<div class="conf-pill ${consensus.color}" style="padding:.15rem .4rem;font-size:9px;">CONSENSO ${consensus.level}</div>`
+        : '';
+
+      const consensusFooter = consensus
+        ? `<div class="mt-2 text-[10px] text-txt-dim leading-relaxed">${consensus.desc}</div>`
+        : (sourceCount === 1
+            ? `<div class="mt-2 text-[10px] text-txt-dim">Apenas Poisson disponível. Odds ficam disponíveis 1-14 dias antes do jogo.</div>`
+            : `<div class="mt-2 text-[10px] text-txt-dim">${sourceCount} fontes — odds Pinnacle ainda não publicadas.</div>`);
+
+      return `
+      <div class="mb-5 bg-bg-card2 border border-border-l p-3">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-[10px] tracking-widest text-txt-dim">🎯 CONSENSO MULTI-FONTE (1X2)</div>
+          ${consensusBadge}
+        </div>
+
+        <!-- Header -->
+        <div class="grid grid-cols-4 gap-1 text-[9px] tracking-widest text-txt-dim py-1 border-b border-border-m">
+          <div></div>
+          <div class="text-center">POISSON</div>
+          <div class="text-center">API</div>
+          <div class="text-center">${oddsB ? oddsB.bookmaker.name.toUpperCase() : 'PINNACLE'}</div>
+        </div>
+
+        ${row('CASA',   'text-acc-grn', 'home')}
+        ${row('EMPATE', 'text-acc-amb', 'draw')}
+        ${row('FORA',   'text-acc-red', 'away')}
+
+        <div class="flex items-center justify-between mt-2 text-[9px] text-txt-dim">
+          <span>Fonte ativa: ${bookmakerLabel}</span>
+          <span>${sourceCount} fonte${sourceCount > 1 ? 's' : ''}</span>
+        </div>
+        ${consensusFooter}
+      </div>
+      `;
+    })()}
+
+    <div class="text-[10px] tracking-widest text-txt-dim mb-2">MATRIZ POISSON — PLACAR EXATO (P × 100)</div>
+    <div class="overflow-x-auto -mx-1 px-1">
+    <div class="flex gap-2 items-start min-w-[280px]">
+      <div class="grid gap-1 flex-shrink-0" style="grid-template-rows: repeat(5, 36px); align-self:end;">
+        ${[0,1,2,3,4].map(i => `<div class="text-[10px] text-txt-dim flex items-center justify-end pr-1 w-5">${i}</div>`).join('')}
+      </div>
+      <div class="flex-shrink-0">
+        <div class="grid grid-cols-5 gap-1">
+          ${matrix.map((row,i) => row.map((p,j) => `
+            <div class="heat-cell w-12 h-9 flex items-center justify-center text-[11px] font-bold tabular-nums cursor-default"
+                 data-cell="${i}-${j}"
+                 style="background:${heatCellColor(p)}; color:${p/maxP > 0.4 ? '#08090b' : '#8b94a8'};"
+                 title="${game.home} ${i}x${j} ${game.away} → ${(p*100).toFixed(2)}%">
+              ${(p*100).toFixed(1)}
+            </div>`).join('')).join('')}
+        </div>
+        <div class="grid grid-cols-5 gap-1 mt-1">
+          ${[0,1,2,3,4].map(j => `<div class="w-12 text-center text-[10px] text-txt-dim">${j}</div>`).join('')}
+        </div>
+      </div>
+    </div>
+    </div>
+    <div class="flex justify-between text-[9px] text-txt-dim tracking-widest mt-2">
+      <span>↑ GOLS CASA</span><span>GOLS FORA →</span>
+    </div>
+
+    <div class="mt-5 pt-5 border-t border-border-l">
+      <div class="text-[10px] tracking-widest text-txt-dim mb-2">TOP 5 PLACARES MAIS PROVÁVEIS</div>
+      <div class="grid grid-cols-5 gap-2">
+        ${top5.map((s,idx) => `
+          <div class="bg-bg-card2 border ${idx===0 ? 'border-acc-grn glow-grn' : 'border-border-l'} p-2 text-center">
+            <div class="text-[9px] text-txt-dim">#${idx+1}</div>
+            <div class="font-display font-bold text-lg tabular-nums">${s.h}-${s.a}</div>
+            <div class="text-[10px] ${idx===0 ? 'text-acc-grn' : 'text-txt-mid'} tabular-nums">${(s.p*100).toFixed(1)}%</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+
+  $('#matrix-content').innerHTML = matrixHTML;
+  $('#matrix-status').innerHTML = `<span class="text-acc-cyn">● ANÁLISE COMPLETA</span>`;
+}
+
+/* ─── Estado global do último cálculo (usado pelo Modo Apresentação e Copiar) ─── */
+let lastHedgeState = null;
+
+/**
+ * Confidence Score:
+ * Quanto mais concentrada a distribuição, maior a confiança.
+ * Métrica = probabilidade do palpite top-1 (placar exato mais provável).
+ * - >= 14%  → ALTA   (jogo bem definido)
+ * - 9-14%   → MÉDIA
+ * - < 9%    → BAIXA  (jogo aberto, Hedge mais valioso)
+ */
+function computeConfidence(matrix) {
+  let maxP = 0;
+  for (let i = 0; i < matrix.length; i++)
+    for (let j = 0; j < matrix[i].length; j++)
+      if (matrix[i][j] > maxP) maxP = matrix[i][j];
+
+  let level, color, label, bars;
+  if (maxP >= 0.14)      { level = 'ALTA';  color = 'text-acc-grn'; label = 'Jogo definido';     bars = 3; }
+  else if (maxP >= 0.09) { level = 'MÉDIA'; color = 'text-acc-amb'; label = 'Algumas dúvidas';   bars = 2; }
+  else                   { level = 'BAIXA'; color = 'text-acc-red'; label = 'Jogo aberto';       bars = 1; }
+  return { level, color, label, bars, topProb: maxP };
+}
+
+function renderHedge(game, lambdaData) {
+  const { lambdaHome, lambdaAway } = lambdaData;
+  const matrix = buildScoreMatrix(lambdaHome, lambdaAway, 6);
+  const result = computeHedgeStrategy(matrix, NUM_ACCOUNTS);
+  const { accounts, combinedEV, popMatrix } = result;
+  const confidence = computeConfidence(matrix);
+
+  // Top palpites populares da mesa
+  const mesaTop = topPopularPalpites(popMatrix, 3);
+
+  // Salva estado pro Modo Apresentação / Copiar
+  lastHedgeState = { game, accounts, combinedEV, confidence, lambdaHome, lambdaAway, popMatrix, mesaTop };
+
+  // Habilita botão de apresentação
+  const btnPres = $('#btn-presentation');
+  if (btnPres) btnPres.disabled = false;
+
+  const modeAdvice = TOURNAMENT_ADVICE[tournamentMode.mode];
+
+  const oddsBundle = lambdaData.oddsBundle;
+  const correctScores = oddsBundle?.correctScores;
+
+  const cardsHTML = accounts.map((acc, idx) => {
+    const op  = ACCOUNTS[idx];
+    const num = String(idx + 1).padStart(2, '0');
+
+    // Differential: 1 - popularidade. Quanto mais alto, mais "diferente da mesa"
+    const popularity = popMatrix[acc.h] ? popMatrix[acc.h][acc.a] : 0;
+    const differential = (1 - popularity) * 100;
+    let diffLabel, diffColor;
+    if (differential >= 95)      { diffLabel = 'ÚNICO';     diffColor = 'text-acc-vio'; }
+    else if (differential >= 90) { diffLabel = 'RARO';      diffColor = 'text-acc-grn'; }
+    else if (differential >= 80) { diffLabel = 'INCOMUM';   diffColor = 'text-acc-cyn'; }
+    else if (differential >= 65) { diffLabel = 'MÉDIO';     diffColor = 'text-acc-amb'; }
+    else                          { diffLabel = 'POPULAR';   diffColor = 'text-acc-red'; }
+
+    // Avisos especiais
+    let warning = '';
+    if (idx === 0 && differential < 65) {
+      warning = `<div class="mt-2 text-[9px] text-acc-red">⚠ Mesa vai jogar isso. Considere ATAQUE.</div>`;
+    }
+    if (idx === 2 && tournamentMode.camouflage) {
+      warning = `<div class="mt-2 text-[9px] text-acc-amb">🎭 Modo camuflado: parecendo amador</div>`;
+    }
+
+    // ODD PINNACLE pro placar específico (se disponível)
+    const cs = correctScores?.[`${acc.h}-${acc.a}`];
+    let oddsRow = '';
+    if (cs) {
+      // Compara prob Poisson vs prob implícita pelas odds
+      const pPoisson = acc.prob;
+      const pOdds = cs.pNormalized;
+      const diff = pOdds - pPoisson;
+      let valueLabel, valueColor;
+      if (diff > 0.02)       { valueLabel = '🟢 ODDS CONFIRMAM'; valueColor = 'text-acc-grn'; }
+      else if (diff < -0.02) { valueLabel = '🔴 ODDS DISCORDAM'; valueColor = 'text-acc-red'; }
+      else                    { valueLabel = '⚖ NEUTRO';         valueColor = 'text-acc-cyn'; }
+
+      oddsRow = `
+        <div class="mt-2 bg-bg-deep border border-acc-vio/30 px-2 py-1.5 flex items-center justify-between text-[10px]">
+          <div>
+            <span class="text-acc-vio font-bold">${oddsBundle.bookmaker.name.toUpperCase()}</span>
+            <span class="text-txt-dim ml-1">@${cs.odd.toFixed(2)}</span>
+            <span class="text-txt-mid ml-1">(${(pOdds*100).toFixed(1)}%)</span>
+          </div>
+          <span class="${valueColor} text-[9px] font-bold tracking-widest">${valueLabel}</span>
+        </div>`;
+    } else if (oddsBundle && !correctScores) {
+      oddsRow = `<div class="mt-2 text-[9px] text-txt-dim text-center">📊 ${oddsBundle.bookmaker.name} não publicou placar exato</div>`;
+    }
+
+    return `
+    <div class="bg-bg-card border ${op.borderCls} p-4 ${op.glowCls}">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <div class="text-[10px] tracking-[0.3em] ${op.textCls}">CONTA ${num}</div>
+          <div class="font-display font-bold text-base">${op.name}</div>
+        </div>
+        <div class="text-[10px] text-txt-dim tracking-widest text-right">
+          PALPITE<br/><span class="${op.textCls}">${op.role}</span>
+        </div>
+      </div>
+      <div class="bg-bg-deep border border-border-l p-3 text-center mb-3">
+        <div class="text-[10px] text-txt-dim mb-1 truncate">${game.home} × ${game.away}</div>
+        <div class="font-display font-bold text-4xl tabular-nums ${op.textCls}">
+          ${acc.h} <span class="text-txt-dim">:</span> ${acc.a}
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-1 text-[10px]">
+        <div class="bg-bg-card2 px-2 py-1.5">
+          <div class="text-txt-dim">PROB</div>
+          <div class="text-txt-hi font-bold tabular-nums">${(acc.prob*100).toFixed(1)}%</div>
+        </div>
+        <div class="bg-bg-card2 px-2 py-1.5">
+          <div class="text-txt-dim">EV</div>
+          <div class="${op.textCls} font-bold tabular-nums">${acc.ev.toFixed(1)}</div>
+        </div>
+        <div class="bg-bg-card2 px-2 py-1.5" title="Differential = quão diferente do palpite popular. ÚNICO = ninguém mais vai jogar isso.">
+          <div class="text-txt-dim">DIFF</div>
+          <div class="${diffColor} font-bold text-[10px]">${diffLabel}</div>
+        </div>
+      </div>
+      ${oddsRow}
+      ${warning}
+    </div>`;
+  }).join('');
+
+  const lift = ((combinedEV / accounts[0].ev - 1) * 100).toFixed(1);
+
+  // Barra de confiança visual
+  const confBarsHTML = [1,2,3].map(i =>
+    `<span class="${i <= confidence.bars ? 'on' : ''}"></span>`
+  ).join('');
+
+  // Painel "O que a mesa vai jogar"
+  const mesaHTML = `
+    <div class="bg-bg-card border border-acc-red/40 p-3">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-[10px] tracking-[0.3em] text-acc-red">📊 O QUE A MESA VAI JOGAR</div>
+        <div class="text-[9px] text-txt-dim">${tournamentMode.totalPlayers} jogadores</div>
+      </div>
+      <div class="grid grid-cols-3 gap-1">
+        ${mesaTop.map((p, idx) => {
+          // Marca se algum dos nossos palpites coincide
+          const overlap = accounts.find(a => a.h === p.h && a.a === p.a);
+          const overlapCls = overlap ? 'border-acc-red bg-acc-red/10' : 'border-border-l';
+          return `
+          <div class="border ${overlapCls} px-2 py-1.5 text-center">
+            <div class="text-[9px] text-txt-dim">#${idx+1}</div>
+            <div class="font-bold text-sm tabular-nums">${p.h}-${p.a}</div>
+            <div class="text-[9px] text-acc-red">${(p.popularity*100).toFixed(0)}%</div>
+            ${overlap ? `<div class="text-[8px] text-acc-red mt-0.5">⚠ OVERLAP</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="text-[9px] text-txt-dim mt-2 leading-tight">
+        Estimativa do palpite popular. Se algum dos seus tem ⚠ OVERLAP, considere mudar manualmente.
+      </div>
+    </div>
+  `;
+
+  $('#hedge-content').innerHTML = `
+    <!-- Modo Torneio ativo + Toolbar -->
+    <div class="bg-bg-card border border-border-l p-3">
+      <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
+        <div class="flex items-center gap-2">
+          <span class="${modeAdvice.color} text-[10px] tracking-widest font-bold">${modeAdvice.title}</span>
+          <span class="text-txt-dim text-[10px]">•</span>
+          <div class="conf-pill ${confidence.color}" style="padding:.15rem .4rem;font-size:9px;">
+            <span class="conf-bar">${confBarsHTML}</span>
+            ${confidence.level}
+          </div>
+        </div>
+        <div class="flex gap-1">
+          <button id="btn-copy-hedge" class="text-[10px] tracking-widest border border-border-m px-2 py-1 hover:border-acc-grn hover:text-acc-grn transition" title="Copiar palpites">
+            📋 COPIAR
+          </button>
+          <button id="btn-pres-hedge" class="text-[10px] tracking-widest border border-border-m px-2 py-1 hover:border-acc-cyn hover:text-acc-cyn transition" title="Modo Apresentação (P)">
+            ⛶ ZOOM
+          </button>
+        </div>
+      </div>
+    </div>
+
+    ${mesaHTML}
+
+    ${cardsHTML}
+
+    <div class="bg-gradient-to-br from-bg-card to-bg-card2 border border-acc-cyn p-4">
+      <div class="text-[10px] tracking-[0.3em] text-acc-cyn mb-2">EV CONJUNTO (${NUM_ACCOUNTS} CONTAS)</div>
+      <div class="flex items-baseline gap-2">
+        <span class="font-display font-bold text-3xl text-acc-cyn tabular-nums">${combinedEV.toFixed(2)}</span>
+        <span class="text-txt-mid text-xs">pts esperados</span>
+      </div>
+      <div class="mt-2 text-[10px] text-txt-dim">
+        <span class="text-acc-grn">+${lift}%</span> sobre aposta única
+      </div>
+    </div>`;
+
+  // Bind dos botões
+  const btnCopy = $('#btn-copy-hedge');
+  if (btnCopy) btnCopy.addEventListener('click', () => copyHedgePalpites());
+  const btnPres2 = $('#btn-pres-hedge');
+  if (btnPres2) btnPres2.addEventListener('click', () => openPresentationMode());
+
+  // Highlight das células escolhidas no heatmap
+  highlightHedgeCells(accounts);
+}
+
+/* ─── Destaca as células do heatmap correspondentes aos palpites ─── */
+function highlightHedgeCells(accounts) {
+  // Remove highlights anteriores
+  $$('.heat-cell-hl-1, .heat-cell-hl-2, .heat-cell-hl-3').forEach(el => {
+    el.classList.remove('heat-cell-hl-1', 'heat-cell-hl-2', 'heat-cell-hl-3');
+  });
+  // Adiciona novos
+  accounts.forEach((acc, idx) => {
+    const cell = document.querySelector(`[data-cell="${acc.h}-${acc.a}"]`);
+    if (cell) cell.classList.add(`heat-cell-hl-${idx + 1}`);
+  });
+}
+
+/* ─── Copia palpites como texto pronto pro bolão ─── */
+function copyHedgePalpites() {
+  if (!lastHedgeState) return;
+  const { game, accounts, confidence } = lastHedgeState;
+  const dateLabel = formatDate(game.kickoff) + ' ' + formatTime(game.kickoff);
+
+  const lines = [
+    `🎯 ${game.home} x ${game.away}`,
+    `📅 ${dateLabel} • Confiança: ${confidence.level}`,
+    ''
+  ];
+  accounts.forEach((acc, idx) => {
+    const op = ACCOUNTS[idx];
+    const emoji = idx === 0 ? '🟢' : idx === 1 ? '🟡' : '🟣';
+    lines.push(`${emoji} ${op.name} (${op.role}): ${acc.h} x ${acc.a}`);
+  });
+  lines.push('');
+  lines.push(`📊 EV conjunto: ${lastHedgeState.combinedEV.toFixed(1)} pts esperados`);
+
+  const text = lines.join('\n');
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => showToast('✓ COPIADO! COLE NO BOLÃO'),
+      () => fallbackCopy(text)
+    );
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); showToast('✓ COPIADO!'); }
+  catch (_) { showToast('✗ ERRO AO COPIAR'); }
+  document.body.removeChild(ta);
+}
+
+function showToast(msg) {
+  const old = document.querySelector('.copy-toast');
+  if (old) old.remove();
+  const t = document.createElement('div');
+  t.className = 'copy-toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2200);
+}
+
+/* ─── MODO APRESENTAÇÃO ─── */
+function openPresentationMode() {
+  if (!lastHedgeState) return;
+  const { game, accounts, combinedEV, confidence } = lastHedgeState;
+
+  const cards = accounts.map((acc, idx) => {
+    const op = ACCOUNTS[idx];
+    return `
+    <div class="pres-card ${op.textCls}">
+      <div class="big-name ${op.textCls}">${op.name} <span class="text-txt-dim">// ${op.role}</span></div>
+      <div class="big-score ${op.textCls}">${acc.h} <span class="text-txt-dim">:</span> ${acc.a}</div>
+      <div class="text-[11px] text-txt-mid tracking-widest mt-2">
+        ${(acc.prob*100).toFixed(2)}% • EV ${acc.ev.toFixed(1)} pts
+      </div>
+    </div>`;
+  }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'presentation-overlay';
+  overlay.id = 'presentation-overlay';
+  overlay.innerHTML = `
+    <button id="btn-close-pres" class="absolute top-6 right-6 text-txt-mid hover:text-acc-red text-3xl leading-none">✕</button>
+
+    <div class="text-center mb-8">
+      <div class="text-[11px] tracking-[0.4em] text-txt-dim mb-2">${formatDate(game.kickoff)} • ${formatTime(game.kickoff)}</div>
+      <h2 class="font-display font-bold text-3xl md:text-4xl text-txt-hi">${game.home} <span class="text-txt-dim mx-3">×</span> ${game.away}</h2>
+      <div class="mt-3 conf-pill ${confidence.color}" style="display:inline-flex;">
+        CONFIANÇA ${confidence.level} • ${confidence.label.toUpperCase()}
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-stretch justify-center gap-4 md:gap-6">
+      ${cards}
+    </div>
+
+    <div class="mt-10 text-center">
+      <div class="text-[10px] tracking-[0.3em] text-acc-cyn">EV CONJUNTO</div>
+      <div class="font-display font-bold text-4xl text-acc-cyn tabular-nums">${combinedEV.toFixed(2)} <span class="text-base text-txt-dim">pts</span></div>
+    </div>
+
+    <div class="mt-8 flex gap-3">
+      <button id="btn-copy-pres" class="text-[11px] tracking-widest border border-acc-grn text-acc-grn px-4 py-2 hover:bg-acc-grn hover:text-bg-deep transition">📋 COPIAR PALPITES</button>
+      <button id="btn-close-pres-2" class="text-[11px] tracking-widest border border-border-m text-txt-mid px-4 py-2 hover:border-acc-red hover:text-acc-red transition">FECHAR (ESC)</button>
+    </div>
+
+    <div class="absolute bottom-4 text-[9px] tracking-[0.3em] text-txt-dim">PRESSIONE ESC PARA SAIR</div>
+  `;
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  overlay.querySelector('#btn-close-pres').onclick   = close;
+  overlay.querySelector('#btn-close-pres-2').onclick = close;
+  overlay.querySelector('#btn-copy-pres').onclick    = copyHedgePalpites;
+
+  // ESC fecha
+  const escHandler = (e) => {
+    if (e.key === 'Escape') {
+      close();
+      document.removeEventListener('keydown', escHandler);
+    }
+  };
+  document.addEventListener('keydown', escHandler);
+}
+
+function buildTicker() {
+  if (MOCK_GAMES.length === 0) return;
+  const items = MOCK_GAMES.map(g => {
+    const status = g.status === 'LIVE' ? `<span class="text-acc-red">●LIVE</span>` :
+                   g.status === 'FIN'  ? `<span class="text-txt-dim">FIN</span>` :
+                                         `<span class="text-acc-cyn">${formatDate(g.kickoff)}</span>`;
+    const score = g.score ? `${g.score[0]}-${g.score[1]}` : 'vs';
+    return `${status} ${g.home.toUpperCase()} <span class="text-txt-hi font-bold">${score}</span> ${g.away.toUpperCase()}`;
+  }).join('  •  ');
+  $('#ticker-content').innerHTML = items + '  •  ';
+  $('#ticker-content-2').innerHTML = items + '  •  ';
+}
+
+function updateClock() {
+  const d = new Date();
+  $('#clock').textContent = d.toLocaleTimeString('pt-BR', { hour12: false });
+}
+
+$$('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentFilter = btn.dataset.filter;
+    $$('.filter-btn').forEach(b => {
+      b.classList.remove('bg-acc-grn','text-bg-deep','font-bold');
+      b.classList.add('border','border-border-m','text-txt-mid');
+    });
+    btn.classList.add('bg-acc-grn','text-bg-deep','font-bold');
+    btn.classList.remove('border','border-border-m','text-txt-mid');
+    renderGames();
+  });
+});
+
+$('#btn-refresh').addEventListener('click', () => {
+  fetchPartidasReais(true); // força atualização — ignora cache
+});
+
+/* ─── Filtro de DATA (HOJE / SEMANA / QUALQUER) ─── */
+$$('.date-filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentDateFilter = btn.dataset.dateFilter;
+    $$('.date-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderGames();
+  });
+});
+
+/* ─── Botão Modo Apresentação no header ─── */
+const btnPresentation = $('#btn-presentation');
+if (btnPresentation) {
+  btnPresentation.addEventListener('click', () => {
+    if (lastHedgeState) openPresentationMode();
+  });
+}
+
+/* ─── Atalho de teclado P para abrir Modo Apresentação ─── */
+document.addEventListener('keydown', (e) => {
+  // Ignora se estiver digitando em input
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if ((e.key === 'p' || e.key === 'P') && lastHedgeState && !document.getElementById('presentation-overlay')) {
+    openPresentationMode();
+  }
+});
+
+/* ---------- BOOTSTRAP INICIAL ---------- */
+/* ---- UI de pontuação configurável ---- */
+const POINTS_COLORS = {
+  exact: 'text-acc-grn font-bold', winnerGoals: 'text-acc-grn',
+  winnerDiff: 'text-acc-cyn', draw: 'text-acc-cyn',
+  winnerLoser: 'text-acc-amb', winner: 'text-txt-mid', oneTeam: 'text-acc-vio',
+};
+
+function renderPointsDisplay() {
+  $('#points-display').innerHTML = Object.keys(POINTS_LABELS).map(k => `
+    <div class="flex justify-between items-center">
+      <span class="text-txt-mid">${POINTS_LABELS[k]}</span>
+      <span class="${POINTS_COLORS[k]} tabular-nums">+${POINTS[k]}</span>
+    </div>`).join('');
+}
+
+function renderPointsEdit() {
+  $('#points-edit').innerHTML = Object.keys(POINTS_LABELS).map(k => `
+    <div class="flex justify-between items-center gap-2">
+      <span class="text-txt-mid flex-1">${POINTS_LABELS[k]}</span>
+      <div class="flex items-center gap-1">
+        <span class="text-txt-dim">+</span>
+        <input type="number" data-key="${k}" value="${POINTS[k]}" min="0" max="99"
+          class="w-12 bg-bg-deep border border-border-m text-txt-hi text-center text-xs py-0.5 tabular-nums focus:border-acc-cyn outline-none"/>
+      </div>
+    </div>`).join('');
+}
+
+$('#btn-edit-points').addEventListener('click', () => {
+  const editing = !$('#points-edit').classList.contains('hidden');
+  if (editing) return;
+  renderPointsEdit();
+  $('#points-display').classList.add('hidden');
+  $('#points-edit').classList.remove('hidden');
+  $('#btn-save-points').classList.remove('hidden');
+  $('#btn-edit-points').textContent = '✕ CANCELAR';
+  $('#btn-edit-points').classList.add('text-acc-red', 'border-acc-red');
+});
+
+$('#btn-save-points').addEventListener('click', () => {
+  document.querySelectorAll('#points-edit input').forEach(inp => {
+    const v = parseInt(inp.value);
+    if (!isNaN(v) && v >= 0) POINTS[inp.dataset.key] = v;
+  });
+  savePoints();
+  renderPointsDisplay();
+  $('#points-display').classList.remove('hidden');
+  $('#points-edit').classList.add('hidden');
+  $('#btn-save-points').classList.add('hidden');
+  $('#btn-edit-points').textContent = '✎ EDITAR';
+  $('#btn-edit-points').classList.remove('text-acc-red', 'border-acc-red');
+  // Reprocessa o jogo selecionado com os novos pontos
+  if (selectedGameId) selectGame(selectedGameId);
+});
+
+/* ══════════════════════════════════════════════════════
+ * SEÇÃO 04 — CLASSIFICAÇÃO / CHAVEAMENTO COPA 2026
+ * ══════════════════════════════════════════════════════ */
+let standingsActiveTab = 'grupos';
+let standingsCache = null;
+let bracketCache   = null;
+
+async function fetchStandings() {
+  try {
+    const res = await fetch('/api/standings?league=1&season=2026');
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json?.response?.[0]?.league?.standings || null;
+  } catch (_) { return null; }
+}
+
+async function fetchRound(round) {
+  try {
+    const params = `league=1&season=2026&round=${encodeURIComponent(round)}`;
+    const res = await fetch(`/api/fixtures?${params}`);
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json?.response || [];
+  } catch (_) { return []; }
+}
+
+function standingsTabSwitch(tab) {
+  standingsActiveTab = tab;
+  const isGrupos = tab === 'grupos';
+  $('#grupos-view').classList.toggle('hidden', !isGrupos);
+  $('#bracket-view').classList.toggle('hidden', isGrupos);
+  $$('.standings-tab').forEach(b => {
+    const active = (b.id === 'btn-tab-grupos' && isGrupos) || (b.id === 'btn-tab-bracket' && !isGrupos);
+    b.className = active
+      ? 'standings-tab text-[10px] tracking-widest px-3 py-1.5 bg-acc-grn text-bg-deep font-bold'
+      : 'standings-tab text-[10px] tracking-widest px-3 py-1.5 border border-border-m text-txt-mid hover:text-acc-cyn';
+  });
+}
+
+function renderGroupCard(group) {
+  const letter = group[0]?.group?.replace('Group ', '') || '?';
+  const rows = group.map((t, i) => {
+    const qual = i < 2 ? 'border-l-2 border-acc-grn' : i === 2 ? 'border-l-2 border-acc-amb' : '';
+    const pts  = t.points;
+    const gd   = t.goalsDiff >= 0 ? `+${t.goalsDiff}` : `${t.goalsDiff}`;
+    return `
+    <tr class="${qual} text-[11px]">
+      <td class="py-1 pl-2 text-txt-hi font-medium truncate max-w-[110px]">${t.team.name}</td>
+      <td class="py-1 text-center text-txt-dim tabular-nums">${t.all.played}</td>
+      <td class="py-1 text-center text-acc-grn tabular-nums">${t.all.win}</td>
+      <td class="py-1 text-center text-acc-amb tabular-nums">${t.all.draw}</td>
+      <td class="py-1 text-center text-acc-red tabular-nums">${t.all.lose}</td>
+      <td class="py-1 text-center text-txt-mid tabular-nums">${t.all.goals.for}:${t.all.goals.against}</td>
+      <td class="py-1 text-center text-txt-mid tabular-nums text-[10px]">${gd}</td>
+      <td class="py-1 pr-2 text-center font-bold tabular-nums ${pts >= 4 ? 'text-acc-grn' : pts >= 2 ? 'text-acc-amb' : 'text-txt-mid'}">${pts}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+  <div class="bg-bg-card border border-border-l overflow-hidden">
+    <div class="px-3 py-2 border-b border-border-l flex items-center justify-between">
+      <span class="text-[10px] tracking-[0.25em] text-acc-grn font-bold">GRUPO ${letter}</span>
+      <span class="text-[9px] text-txt-dim tracking-widest">${group[0]?.group || ''}</span>
+    </div>
+    <table class="w-full">
+      <thead>
+        <tr class="text-[9px] tracking-widest text-txt-dim border-b border-border-l">
+          <th class="text-left py-1 pl-2">TIME</th>
+          <th class="text-center py-1">J</th>
+          <th class="text-center py-1">V</th>
+          <th class="text-center py-1">E</th>
+          <th class="text-center py-1">D</th>
+          <th class="text-center py-1">GF:GA</th>
+          <th class="text-center py-1">SG</th>
+          <th class="text-center py-1 pr-2">PTS</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-border-l">${rows}</tbody>
+    </table>
+    <div class="px-3 py-1.5 border-t border-border-l flex gap-3 text-[9px] text-txt-dim">
+      <span class="flex items-center gap-1"><span class="w-2 h-2 bg-acc-grn/60 inline-block"></span>Classificados</span>
+      <span class="flex items-center gap-1"><span class="w-2 h-2 bg-acc-amb/60 inline-block"></span>Possível 3°</span>
+    </div>
+  </div>`;
+}
+
+function renderGroups(standings) {
+  const grid = $('#grupos-grid');
+  if (!standings || !standings.length) {
+    grid.innerHTML = `<div class="col-span-4 text-center text-txt-dim text-xs py-12">
+      Grupos ainda não disponíveis na API.<br>
+      <span class="text-[10px] opacity-50">Copa do Mundo 2026 começa em 11 de junho.</span>
+    </div>`;
+    return;
+  }
+  grid.innerHTML = standings.map(renderGroupCard).join('');
+}
+
+function matchCard(m, compact = false) {
+  const home = m.teams?.home?.name || '?';
+  const away = m.teams?.away?.name || '?';
+  const gh   = m.goals?.home;
+  const ga   = m.goals?.away;
+  const played = gh !== null && ga !== null;
+  const homeWon = played && gh > ga;
+  const awayWon = played && ga > gh;
+  const score = played ? `${gh} — ${ga}` : 'vs';
+  const date  = m.fixture?.date ? new Date(m.fixture.date).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }) : '—';
+
+  return `
+  <div class="bg-bg-card border border-border-l p-2.5 ${compact ? 'text-[10px]' : 'text-[11px]'} hover:border-border-m transition">
+    <div class="flex items-center justify-between gap-2">
+      <span class="truncate ${homeWon ? 'text-txt-hi font-bold' : 'text-txt-mid'}" style="max-width:80px">${home}</span>
+      <span class="tabular-nums font-mono ${played ? 'text-acc-grn font-bold' : 'text-txt-dim'} flex-shrink-0">${score}</span>
+      <span class="truncate text-right ${awayWon ? 'text-txt-hi font-bold' : 'text-txt-mid'}" style="max-width:80px">${away}</span>
+    </div>
+    <div class="text-[9px] text-txt-dim text-center mt-1">${date}</div>
+  </div>`;
+}
+
+function renderBracket(rounds) {
+  const order = [
+    { key: 'Round of 32',    label: 'FASE DE 32',  cols: 2 },
+    { key: 'Round of 16',    label: 'OITAVAS',      cols: 1 },
+    { key: 'Quarter-finals', label: 'QUARTAS',       cols: 1 },
+    { key: 'Semi-finals',    label: 'SEMIFINAIS',    cols: 1 },
+    { key: 'Final',          label: 'FINAL',         cols: 1 },
+  ];
+
+  const grid = $('#bracket-grid');
+
+  const cols = order.map(({ key, label, cols }) => {
+    const matches = rounds[key] || [];
+    const half = Math.ceil(matches.length / cols);
+    let inner = '';
+    for (let c = 0; c < cols; c++) {
+      const slice = matches.slice(c * half, (c + 1) * half);
+      inner += `<div class="flex flex-col gap-2 w-44">${slice.map(m => matchCard(m, true)).join('')}</div>`;
+    }
+    const colClass = cols === 2 ? 'flex gap-2' : '';
+    return `
+    <div class="flex-shrink-0">
+      <div class="text-[9px] tracking-[0.25em] text-acc-cyn font-bold mb-2 text-center">${label}</div>
+      <div class="${colClass}">${inner}</div>
+    </div>`;
+  }).join(`<div class="flex items-center text-txt-dim text-lg self-stretch pt-8">›</div>`);
+
+  // 3rd place match
+  const third = (rounds['3rd Place Final'] || rounds['Third Place Final'] || []);
+  const thirdHTML = third.length ? `
+    <div class="flex-shrink-0">
+      <div class="text-[9px] tracking-[0.25em] text-acc-amb font-bold mb-2 text-center">3° LUGAR</div>
+      <div class="w-44">${third.map(m => matchCard(m, true)).join('')}</div>
+    </div>` : '';
+
+  grid.innerHTML = cols + (thirdHTML ? `<div class="flex items-center text-txt-dim text-lg self-stretch pt-8">›</div>${thirdHTML}` : '');
+}
+
+async function loadStandings(force = false) {
+  const statusEl = $('#standings-status');
+  statusEl.textContent = 'CARREGANDO...';
+  statusEl.className = 'text-[10px] tracking-widest text-acc-amb mb-3';
+
+  if (!force && standingsCache) {
+    renderGroups(standingsCache);
+    statusEl.textContent = '● GRUPOS ATUALIZADOS';
+    statusEl.className = 'text-[10px] tracking-widest text-acc-grn mb-3';
+    return;
+  }
+
+  const [standings, r32, r16, qf, sf, fin, third] = await Promise.all([
+    fetchStandings(),
+    fetchRound('Round of 32'),
+    fetchRound('Round of 16'),
+    fetchRound('Quarter-finals'),
+    fetchRound('Semi-finals'),
+    fetchRound('Final'),
+    fetchRound('3rd Place Final'),
+  ]);
+
+  standingsCache = standings;
+  bracketCache = {
+    'Round of 32':    r32,
+    'Round of 16':    r16,
+    'Quarter-finals': qf,
+    'Semi-finals':    sf,
+    'Final':          fin,
+    '3rd Place Final':third,
+  };
+
+  renderGroups(standings);
+  renderBracket(bracketCache);
+
+  statusEl.textContent = '● DADOS ATUALIZADOS';
+  statusEl.className = 'text-[10px] tracking-widest text-acc-grn mb-3';
+}
+
+function initStandings() {
+  $('#btn-tab-grupos').addEventListener('click', () => standingsTabSwitch('grupos'));
+  $('#btn-tab-bracket').addEventListener('click', () => {
+    standingsTabSwitch('bracket');
+    if (bracketCache) renderBracket(bracketCache);
+  });
+  $('#btn-refresh-standings').addEventListener('click', () => loadStandings(true));
+  loadStandings();
+}
+
+/* ─────────────────────────────────────────────────────── */
+
+/* ══════════════════════════════════════════════════════
+ * SEÇÃO 02 — TABS MATRIZ / DIAGNÓSTICO
+ * ══════════════════════════════════════════════════════ */
+let activeAnalysisTab = 'matriz';
+
+function switchAnalysisTab(tab) {
+  activeAnalysisTab = tab;
+  const isMatriz = tab === 'matriz';
+  $('#tab-matriz').classList.toggle('hidden', !isMatriz);
+  $('#tab-diag').classList.toggle('hidden', isMatriz);
+  $$('.analysis-tab').forEach(b => {
+    const active = (b.id === 'btn-tab-matriz' && isMatriz) || (b.id === 'btn-tab-diag' && !isMatriz);
+    b.className = active
+      ? 'analysis-tab text-[10px] tracking-widest px-3 py-1.5 bg-acc-cyn text-bg-deep font-bold'
+      : 'analysis-tab text-[10px] tracking-widest px-3 py-1.5 border border-border-m text-txt-mid hover:text-acc-cyn';
+  });
+}
+
+function initAnalysisTabs() {
+  $('#btn-tab-matriz').addEventListener('click', () => switchAnalysisTab('matriz'));
+  $('#btn-tab-diag').addEventListener('click',   () => switchAnalysisTab('diag'));
+}
+
+function formNarrative(name, form) {
+  if (!form) return `<span class="text-txt-dim">${name}: dados de forma não disponíveis.</span>`;
+  const wins   = form.strip.filter(r => r === 'W').length;
+  const draws  = form.strip.filter(r => r === 'D').length;
+  const losses = form.strip.filter(r => r === 'L').length;
+  const badge  = (r) => r === 'W'
+    ? `<span class="px-1 py-0.5 text-[9px] font-bold bg-acc-grn/20 text-acc-grn border border-acc-grn/40">${r}</span>`
+    : r === 'D'
+    ? `<span class="px-1 py-0.5 text-[9px] font-bold bg-acc-amb/20 text-acc-amb border border-acc-amb/40">${r}</span>`
+    : `<span class="px-1 py-0.5 text-[9px] font-bold bg-acc-red/20 text-acc-red border border-acc-red/40">${r}</span>`;
+  const strip  = form.strip.map(badge).join(' ');
+  let moment = wins >= 4 ? 'excelente momento' : wins >= 3 ? 'boa fase' : losses >= 3 ? 'fase difícil' : 'fase irregular';
+  return `
+    <div class="flex flex-col gap-1">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-txt-hi font-semibold">${name}</span>
+        <div class="flex gap-1">${strip}</div>
+      </div>
+      <div class="text-txt-mid leading-relaxed">
+        Vem de <span class="text-txt-hi">${wins}V ${draws}E ${losses}D</span> nos últimos ${form.strip.length} jogos —
+        <span class="${wins >= 3 ? 'text-acc-grn' : losses >= 3 ? 'text-acc-red' : 'text-acc-amb'}">${moment}</span>,
+        com média de <span class="text-txt-hi">${form.gf.toFixed(1)}</span> gols marcados e
+        <span class="text-txt-hi">${form.ga.toFixed(1)}</span> sofridos por partida.
+      </div>
+    </div>`;
+}
+
+function h2hNarrative(h2hStats, homeName, awayName, h2hGames) {
+  if (!h2hStats || h2hStats.total < 1) {
+    return `<p class="text-txt-dim">Histórico de confrontos diretos insuficiente ou não encontrado.</p>`;
+  }
+  const total = h2hStats.total;
+  const hPct  = Math.round((h2hStats.homeWins / total) * 100);
+  const aPct  = Math.round((h2hStats.awayWins / total) * 100);
+  const dPct  = Math.round((h2hStats.draws    / total) * 100);
+  const dom   = h2hStats.homeWins > h2hStats.awayWins ? homeName
+               : h2hStats.awayWins > h2hStats.homeWins ? awayName : 'Equilíbrio histórico';
+  let text = `Analisados <span class="text-txt-hi">${total} confrontos diretos</span>:
+    <span class="text-acc-grn">${h2hStats.homeWins} vitórias de ${homeName}</span> (${hPct}%),
+    <span class="text-acc-amb">${h2hStats.draws} empates</span> (${dPct}%) e
+    <span class="text-acc-red">${h2hStats.awayWins} vitórias de ${awayName}</span> (${aPct}%). `;
+  text += h2hStats.homeWins !== h2hStats.awayWins
+    ? `<span class="text-txt-hi">${dom}</span> leva vantagem histórica no confronto.`
+    : `O confronto é historicamente equilibrado.`;
+
+  // últimos resultados
+  const recent = (h2hGames || []).slice(0, 3).map(g => {
+    const d = new Date(g.fixture.date).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+    return `<span class="text-txt-mid">${g.teams.home.name} <span class="text-txt-hi font-mono">${g.goals.home}×${g.goals.away}</span> ${g.teams.away.name} <span class="text-[10px] text-txt-dim">(${d})</span></span>`;
+  }).join('<br>');
+
+  return `<p class="text-txt-mid leading-relaxed">${text}</p>${recent ? `<div class="mt-2 space-y-1 pl-2 border-l border-border-m">${recent}</div>` : ''}`;
+}
+
+function prognósticoNarrative(game, lambdaData) {
+  const { lambdaHome, lambdaAway, source } = lambdaData;
+  const matrix   = buildScoreMatrix(lambdaHome, lambdaAway, 6);
+  const outcomes = aggregateOutcomes(matrix);
+  const hPct = (outcomes.home * 100).toFixed(1);
+  const dPct = (outcomes.draw * 100).toFixed(1);
+  const aPct = (outcomes.away * 100).toFixed(1);
+  const favorite = outcomes.home > outcomes.away
+    ? { name: game.home, pct: hPct }
+    : outcomes.away > outcomes.home
+    ? { name: game.away, pct: aPct }
+    : null;
+
+  const top5 = [];
+  for (let i = 0; i < matrix.length; i++)
+    for (let j = 0; j < matrix[i].length; j++)
+      top5.push({ h: i, a: j, p: matrix[i][j] });
+  top5.sort((a,b) => b.p - a.p);
+  const topScores = top5.slice(0, 3).map(s =>
+    `<span class="font-mono text-acc-cyn">${s.h}×${s.a}</span> <span class="text-txt-dim">(${(s.p*100).toFixed(1)}%)</span>`
+  ).join('  ');
+
+  const advice = lambdaData.prediction?.predictions?.advice;
+  const overUnder = lambdaData.prediction?.predictions?.goals?.total
+    ? `${lambdaData.prediction.predictions.goals.total} gols esperados (linha O/U da API).` : '';
+
+  return `
+    <div class="grid grid-cols-3 gap-2 mb-3 text-center">
+      <div class="bg-bg-card2 border border-acc-grn/30 p-2">
+        <div class="text-acc-grn font-bold tabular-nums text-base">${hPct}%</div>
+        <div class="text-[9px] text-txt-dim mt-0.5">VITÓRIA<br>${game.home.split(' ')[0].toUpperCase()}</div>
+      </div>
+      <div class="bg-bg-card2 border border-acc-amb/30 p-2">
+        <div class="text-acc-amb font-bold tabular-nums text-base">${dPct}%</div>
+        <div class="text-[9px] text-txt-dim mt-0.5">EMPATE</div>
+      </div>
+      <div class="bg-bg-card2 border border-acc-red/30 p-2">
+        <div class="text-acc-red font-bold tabular-nums text-base">${aPct}%</div>
+        <div class="text-[9px] text-txt-dim mt-0.5">VITÓRIA<br>${game.away.split(' ')[0].toUpperCase()}</div>
+      </div>
+    </div>
+    <p class="text-txt-mid leading-relaxed">
+      ${favorite ? `O motor favorece <span class="text-txt-hi font-semibold">${favorite.name}</span> com <span class="text-acc-grn">${favorite.pct}%</span> de chance de vitória.` : 'O motor aponta jogo muito equilibrado.'}
+      Placares mais prováveis pelo modelo Poisson (λ${lambdaHome.toFixed(2)}/λ${lambdaAway.toFixed(2)}): ${topScores}.
+      ${overUnder ? `<span class="text-txt-dim">${overUnder}</span>` : ''}
+    </p>
+    ${advice ? `<div class="mt-2 p-2 border border-acc-vio/30 bg-acc-vio/5 text-[11px] text-acc-vio italic">"${advice}"</div>` : ''}
+    <div class="mt-2 text-[10px] text-txt-dim">Fonte dos lambdas: <span class="text-acc-amb">${source}</span></div>`;
+}
+
+function renderLineup(teamData) {
+  if (!teamData) return `<span class="text-txt-dim text-[11px]">Escalação não divulgada.</span>`;
+  const coach    = teamData.coach?.name || '';
+  const starters = (teamData.startXI || []).map(p => p.player?.name || '').filter(Boolean);
+  const subs     = (teamData.substitutes || []).map(p => p.player?.name || '').filter(Boolean);
+  const formation = teamData.formation || '';
+  return `
+    <div>
+      <div class="flex items-center gap-2 mb-2">
+        ${formation ? `<span class="px-2 py-0.5 bg-acc-cyn/10 border border-acc-cyn/30 text-acc-cyn text-[10px] font-bold">${formation}</span>` : ''}
+        ${coach ? `<span class="text-txt-dim text-[10px]">Técnico: <span class="text-txt-mid">${coach}</span></span>` : ''}
+      </div>
+      <div class="flex flex-wrap gap-1 mb-1">
+        ${starters.map(n => `<span class="text-[10px] px-1.5 py-0.5 bg-bg-card2 border border-border-l text-txt-hi">${n}</span>`).join('')}
+      </div>
+      ${subs.length ? `<div class="text-[9px] text-txt-dim mt-1">Banco: ${subs.slice(0,7).join(', ')}${subs.length > 7 ? '...' : ''}</div>` : ''}
+    </div>`;
+}
+
+function renderDiagnostico(game, lambdaData, lineups, h2hGames) {
+  const empty   = $('#diag-empty');
+  const content = $('#diag-content');
+  if (!empty || !content) return;
+  empty.classList.add('hidden');
+  content.classList.remove('hidden');
+
+  const { homeForm, awayForm, h2hStats, injuries } = lambdaData;
+  const homeLineup = lineups?.find(l => l.team?.id === game.homeId);
+  const awayLineup = lineups?.find(l => l.team?.id === game.awayId);
+
+  const injHome = (injuries || []).filter(i => i.team?.id === game.homeId);
+  const injAway = (injuries || []).filter(i => i.team?.id === game.awayId);
+  const allInj  = [...injHome, ...injAway];
+
+  const section = (icon, title, color, body) => `
+    <div>
+      <div class="flex items-center gap-2 mb-2 pb-1 border-b border-border-l">
+        <span class="${color} text-sm">${icon}</span>
+        <span class="text-[10px] tracking-[0.2em] font-bold text-txt-mid">${title}</span>
+      </div>
+      <div class="pl-1 space-y-1">${body}</div>
+    </div>`;
+
+  content.innerHTML = [
+    section('◉', 'MOMENTO DAS EQUIPES', 'text-acc-grn',
+      `<div class="space-y-3">
+        ${formNarrative(game.home, homeForm)}
+        ${formNarrative(game.away, awayForm)}
+      </div>`),
+
+    section('⇌', 'HISTÓRICO DO CONFRONTO', 'text-acc-cyn',
+      h2hNarrative(h2hStats, game.home, game.away, h2hGames)),
+
+    allInj.length ? section('⚠', 'BAIXAS E SUSPENSÕES', 'text-acc-red',
+      `<div class="grid grid-cols-2 gap-3">
+        <div>
+          <div class="text-[10px] text-txt-dim mb-1">${game.home}</div>
+          ${injHome.length ? injHome.map(i => `<div class="text-[11px] text-txt-mid">• ${i.player?.name || '?'} <span class="text-acc-red text-[10px]">(${i.player?.type || i.player?.reason || '—'})</span></div>`).join('') : '<div class="text-txt-dim text-[11px]">Sem baixas registradas</div>'}
+        </div>
+        <div>
+          <div class="text-[10px] text-txt-dim mb-1">${game.away}</div>
+          ${injAway.length ? injAway.map(i => `<div class="text-[11px] text-txt-mid">• ${i.player?.name || '?'} <span class="text-acc-red text-[10px]">(${i.player?.type || i.player?.reason || '—'})</span></div>`).join('') : '<div class="text-txt-dim text-[11px]">Sem baixas registradas</div>'}
+        </div>
+      </div>`) : '',
+
+    section('∑', 'PROGNÓSTICO DO MOTOR', 'text-acc-vio',
+      prognósticoNarrative(game, lambdaData)),
+
+    section('▤', 'PROVÁVEIS ESCALAÇÕES', 'text-acc-amb',
+      lineups && lineups.length
+        ? `<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div><div class="text-[10px] text-txt-dim mb-2">${game.home}</div>${renderLineup(homeLineup)}</div>
+            <div><div class="text-[10px] text-txt-dim mb-2">${game.away}</div>${renderLineup(awayLineup)}</div>
+          </div>`
+        : `<p class="text-txt-dim text-[11px]">Escalações ainda não divulgadas pela API (geralmente disponíveis ~1h antes do jogo).</p>`),
+  ].filter(Boolean).join('');
+}
+
+/* ─────────────────────────────────────────────────────── */
+
+function renderLeagueSelector() {
+  const container = $('#league-selector');
+  if (!container) return;
+  container.innerHTML = LEAGUES.map(lg => {
+    const active = lg.id === LEAGUE_ID && lg.season === SEASON;
+    return `<button
+      data-lid="${lg.id}" data-season="${lg.season}"
+      class="league-btn px-3 py-1 transition ${active
+        ? 'bg-acc-cyn text-bg-deep font-bold'
+        : 'border border-border-m text-txt-mid hover:text-acc-cyn hover:border-acc-cyn'}"
+    >${lg.short}</button>`;
+  }).join('');
+
+  container.querySelectorAll('.league-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const lid    = parseInt(btn.dataset.lid);
+      const season = parseInt(btn.dataset.season);
+      if (lid === LEAGUE_ID && season === SEASON) return;
+      LEAGUE_ID    = lid;
+      SEASON       = season;
+      activeLeague = LEAGUES.find(l => l.id === lid && l.season === season);
+      MOCK_GAMES   = [];
+      lastFetchTime = 0;
+      selectedGameId = null;
+      $('#matrix-content') && ($('#matrix-content').innerHTML = '');
+      $('#hedge-content')  && ($('#hedge-content').innerHTML  = '');
+      renderLeagueSelector();
+      await fetchPartidasReais(true);
+    });
+  });
+}
+
+/* ══════════════════════════════════════════════════════
+ * SEÇÃO 05 — BOLÃO TRACKER
+ * ══════════════════════════════════════════════════════ */
+const TRACKER_KEY = 'bolao_tracker_v2';
+const OUR_ACCOUNTS = [
+  { id: 'kevin',     name: 'Kevin',     color: 'acc-grn', account: 0 },
+  { id: 'gabrielly', name: 'Gabrielly', color: 'acc-amb', account: 1 },
+  { id: 'zebra',     name: 'Zebra',     color: 'acc-vio', account: 2 },
+];
+
+const DEFAULT_PARTICIPANTS = [
+  { id: 'kevin',     name: 'Kevin Schwanke',        isOurs: true,  account: 0 },
+  { id: 'osvaldo',   name: 'Osvaldo Jr M. Moreira', isOurs: false },
+  { id: 'lucas',     name: 'Lucas Ramos',            isOurs: false },
+  { id: 'francisco', name: 'Francisco Rocha',        isOurs: false },
+  { id: 'jhon',      name: 'JHON Silva',             isOurs: false },
+  { id: 'will',      name: 'Will 23 Cabuloso',       isOurs: false },
+  { id: 'fabio',     name: 'Fabio Vianna',           isOurs: false },
+  { id: 'romario',   name: 'Romário Moraes',         isOurs: false },
+  { id: 'gabrielly', name: 'Gabrielly Moraes Lima',  isOurs: true,  account: 1 },
+  { id: 'kaio',      name: 'Kaio Motta Jr',          isOurs: false },
+  { id: 'damrock',   name: 'DamRock',                isOurs: false },
+  { id: 'zebra',     name: 'Zebra',                  isOurs: true,  account: 2 },
+];
+
+let trackerData = { participants: [], games: [] };
+let activeTrackerTab = 'placar';
+let modalGameId = null;
+
+function loadTracker() {
+  try {
+    const raw = localStorage.getItem(TRACKER_KEY);
+    if (raw) { trackerData = JSON.parse(raw); return; }
+  } catch(_) {}
+  trackerData = { participants: DEFAULT_PARTICIPANTS, games: [] };
+  saveTracker();
+}
+
+function saveTracker() {
+  try { localStorage.setItem(TRACKER_KEY, JSON.stringify(trackerData)); } catch(_) {}
+}
+
+/* ── Cálculo de pontos ── */
+function calcPtsForGame(game, participantId) {
+  if (game.actual == null) return null;
+  const guess = game.guesses?.[participantId];
+  if (!guess) return null;
+  return scoreGuess(guess.h, guess.a, game.actual.h, game.actual.a);
+}
+
+function calcTotal(participantId) {
+  return trackerData.games.reduce((sum, g) => {
+    const pts = calcPtsForGame(g, participantId);
+    return sum + (pts ?? 0);
+  }, 0);
+}
+
+function calcLeaderboard() {
+  return trackerData.participants
+    .map(p => ({ ...p, total: calcTotal(p.id) }))
+    .sort((a, b) => b.total - a.total)
+    .map((p, i) => ({ ...p, rank: i + 1 }));
+}
+
+/**
+ * Calcula "Lucro vs Mesa": quanto cada participante ficou acima/abaixo
+ * da média dos pontos de uma rodada. Métrica chave pro torneio.
+ * Retorna mapa { participantId: lucroAcumuladoVsMesa }
+ */
+function calcLuckVsField() {
+  const result = {};
+  trackerData.participants.forEach(p => { result[p.id] = 0; });
+
+  trackerData.games.forEach(game => {
+    if (game.actual == null) return; // jogo não finalizado
+    const points = [];
+    trackerData.participants.forEach(p => {
+      const pts = calcPtsForGame(game, p.id) || 0;
+      points.push({ id: p.id, pts });
+    });
+    if (!points.length) return;
+    const avg = points.reduce((s, x) => s + x.pts, 0) / points.length;
+    points.forEach(({ id, pts }) => { result[id] += (pts - avg); });
+  });
+  return result;
+}
+
+/* ── Tabs ── */
+function switchTrackerTab(tab) {
+  activeTrackerTab = tab;
+  ['placar','jogos','estrategia','config'].forEach(t => {
+    $('#tracker-' + t).classList.toggle('hidden', t !== tab);
+  });
+  $$('.tracker-tab').forEach(b => {
+    const isActive = b.id === `btn-tracker-${tab}`;
+    b.className = isActive
+      ? 'tracker-tab text-[10px] tracking-widest px-3 py-1.5 bg-acc-amb text-bg-deep font-bold'
+      : 'tracker-tab text-[10px] tracking-widest px-3 py-1.5 border border-border-m text-txt-mid hover:text-acc-amb';
+  });
+  if (tab === 'placar')     renderPlacar();
+  if (tab === 'jogos')      renderJogos();
+  if (tab === 'estrategia') renderEstrategia();
+  if (tab === 'config')     renderConfig();
+}
+
+/* ── PLACAR ── */
+function renderPlacar() {
+  const board = calcLeaderboard();
+  const podium = board.slice(0, 3);
+  const ourIds = OUR_ACCOUNTS.map(a => a.id);
+  const luckMap = calcLuckVsField();
+
+  const rankIcon = r => r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `${r}°`;
+  const rankBg   = r => r === 1 ? 'border-yellow-400/50 bg-yellow-400/5'
+                      : r === 2 ? 'border-gray-400/40 bg-gray-400/5'
+                      : r === 3 ? 'border-amber-600/40 bg-amber-600/5'
+                      : 'border-border-l';
+
+  const rows = board.map(p => {
+    const isOurs = p.isOurs;
+    const acc    = OUR_ACCOUNTS.find(a => a.id === p.id);
+    const nameCls = isOurs ? `text-${acc?.color || 'acc-grn'} font-bold` : 'text-txt-hi';
+    const badge   = isOurs ? `<span class="text-[8px] px-1 border border-current opacity-60 ml-1">${acc?.name.toUpperCase()}</span>` : '';
+    const gamesPlayed = trackerData.games.filter(g => g.actual != null && g.guesses?.[p.id] != null).length;
+    const luck = luckMap[p.id] || 0;
+    const luckStr = luck > 0 ? `+${luck.toFixed(1)}` : luck.toFixed(1);
+    const luckCls = luck > 0 ? 'text-acc-grn' : luck < 0 ? 'text-acc-red' : 'text-txt-dim';
+    return `
+    <div class="flex items-center gap-3 px-3 py-2 border ${rankBg(p.rank)} ${isOurs ? 'border-l-2' : ''}">
+      <span class="text-sm w-7 text-center flex-shrink-0">${rankIcon(p.rank)}</span>
+      <span class="flex-1 text-sm ${nameCls}">${p.name}${badge}</span>
+      <span class="text-[10px] text-txt-dim tabular-nums">${gamesPlayed}j</span>
+      <span class="${luckCls} text-[10px] font-bold tabular-nums w-12 text-right" title="Lucro vs Mesa (pontos acima/abaixo da média)">${luckStr}</span>
+      <span class="font-mono font-bold text-lg tabular-nums ${p.rank <= 3 ? 'text-acc-grn' : 'text-txt-hi'}">${p.total}</span>
+      <span class="text-[9px] text-txt-dim">pts</span>
+    </div>`;
+  }).join('');
+
+  $('#leaderboard-list').innerHTML = (rows || `<div class="text-txt-dim text-xs text-center py-8">Nenhum participante cadastrado. Vá em ⚙ CONFIG para adicionar.</div>`)
+    + (board.length ? `<div class="text-[9px] text-txt-dim mt-2 px-3 leading-relaxed">
+      <span class="text-acc-grn font-bold">±X.X</span> = Lucro vs Mesa: quanto cada um pontuou acima/abaixo da média da rodada. <b>Métrica chave do ranking real</b>.
+    </div>` : '');
+
+  // Sidebar: nossos 3
+  const ourStats = OUR_ACCOUNTS.map(acc => {
+    const p = board.find(x => x.id === acc.id);
+    if (!p) return '';
+    const thirdPts = board[2]?.total ?? 0;
+    const gap = thirdPts - p.total;
+    return `
+    <div class="bg-bg-card border border-${acc.color}/40 p-3">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-[10px] tracking-widest text-${acc.color} font-bold">${acc.name.toUpperCase()}</span>
+        <span class="text-[10px] text-txt-dim">${rankIcon(p.rank)} ${p.rank}° lugar</span>
+      </div>
+      <div class="text-2xl font-mono font-bold text-txt-hi tabular-nums">${p.total} <span class="text-sm text-txt-dim">pts</span></div>
+      ${p.rank > 3
+        ? `<div class="text-[10px] text-acc-red mt-1">↓ ${gap}pts do Top 3</div>`
+        : `<div class="text-[10px] text-acc-grn mt-1">✓ No pódio</div>`}
+    </div>`;
+  }).join('');
+  $('#placar-sidebar').innerHTML = ourStats;
+}
+
+/* ── JOGOS ── */
+function renderJogos() {
+  const hint = $('#current-game-hint');
+  if (selectedGameId) {
+    const g = MOCK_GAMES.find(g => g.id === selectedGameId);
+    if (g) hint.innerHTML = `Jogo selecionado: <span class="text-txt-hi">${g.home} × ${g.away}</span> — clique em <span class="text-acc-grn">+ REGISTRAR JOGO</span> para usar esse jogo.`;
+  }
+
+  const list = $('#jogos-list');
+  if (!trackerData.games.length) {
+    list.innerHTML = `<div class="text-txt-dim text-xs text-center py-8">Nenhum jogo registrado ainda.<br>Selecione um jogo no painel de cima e clique em + REGISTRAR JOGO.</div>`;
+    return;
+  }
+
+  list.innerHTML = trackerData.games.map((game, gi) => {
+    const played = game.actual != null;
+    const ptsRow = trackerData.participants.map(p => {
+      const pts = calcPtsForGame(game, p.id);
+      const guess = game.guesses?.[p.id];
+      const acc = OUR_ACCOUNTS.find(a => a.id === p.id);
+      const nameCls = p.isOurs ? `text-${acc?.color || 'acc-grn'} font-bold` : 'text-txt-mid';
+      return `
+      <div class="flex items-center justify-between text-[11px] py-0.5">
+        <span class="${nameCls} w-24 truncate">${p.name}</span>
+        <span class="font-mono text-txt-dim">${guess ? `${guess.h}×${guess.a}` : '—'}</span>
+        <span class="font-bold w-8 text-right tabular-nums ${pts != null ? (pts >= 20 ? 'text-acc-grn' : pts > 0 ? 'text-acc-amb' : 'text-txt-dim') : 'text-txt-dim'}">${pts != null ? `+${pts}` : '—'}</span>
+      </div>`;
+    }).join('');
+
+    return `
+    <div class="bg-bg-card border border-border-l overflow-hidden">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-border-l">
+        <div>
+          <span class="text-txt-hi font-semibold">${game.home}</span>
+          <span class="mx-2 font-mono ${played ? 'text-acc-grn font-bold' : 'text-txt-dim'}">${played ? `${game.actual.h} × ${game.actual.a}` : 'vs'}</span>
+          <span class="text-txt-hi font-semibold">${game.away}</span>
+        </div>
+        <div class="flex gap-2">
+          ${played ? '<span class="text-[9px] text-acc-grn border border-acc-grn/40 px-2 py-0.5">FINALIZADO</span>' : '<span class="text-[9px] text-acc-amb border border-acc-amb/40 px-2 py-0.5">AGUARDANDO</span>'}
+          <button onclick="openModal(${gi})" class="text-[10px] tracking-widest border border-border-m text-txt-mid px-2 py-0.5 hover:border-acc-cyn hover:text-acc-cyn transition">✎ EDITAR</button>
+          <button onclick="removeGame(${gi})" class="text-[10px] text-acc-red/60 hover:text-acc-red px-1">✕</button>
+        </div>
+      </div>
+      <div class="px-4 py-2 space-y-0.5">${ptsRow}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ── ESTRATÉGIA ── */
+function renderEstrategia() {
+  const board = calcLeaderboard();
+  const total = board.length;
+  const thirdPts = board[2]?.total ?? 0;
+  const firstPts = board[0]?.total ?? 0;
+  const totalGames = trackerData.games.length;
+  const playedGames = trackerData.games.filter(g => g.actual != null).length;
+
+  const cards = OUR_ACCOUNTS.map(acc => {
+    const p = board.find(x => x.id === acc.id);
+    if (!p) return '';
+    const rank = p.rank;
+    const gap  = thirdPts - p.total;
+    const inPodium = rank <= 3;
+
+    // Define postura estratégica
+    let postura, posturaColor, posturaDesc, hedgeAdj;
+    if (inPodium) {
+      postura = 'CONSERVADOR'; posturaColor = 'acc-grn';
+      posturaDesc = 'Você está no pódio. Proteja a posição com o hedge padrão — evite riscos desnecessários.';
+      hedgeAdj = 'Manter zona de maior probabilidade como pick principal.';
+    } else if (gap <= 15) {
+      postura = 'MODERADO'; posturaColor = 'acc-amb';
+      posturaDesc = `A ${gap}pts do Top 3. Zona de pressão — use picks de EV mais alto mas sem abrir mão do hedge.`;
+      hedgeAdj = 'Considere o 2° pick por EV dentro da zona, não apenas o mais provável.';
+    } else if (gap <= 35) {
+      postura = 'AGRESSIVO'; posturaColor = 'acc-red';
+      posturaDesc = `A ${gap}pts do Top 3. Recuperação necessária — priorize EV máximo sobre segurança.`;
+      hedgeAdj = 'Use placar com maior EV independente de zona. Cobertura de upset recomendada.';
+    } else {
+      postura = 'ALL-IN'; posturaColor = 'acc-red';
+      posturaDesc = `A ${gap}pts do Top 3. Modo all-in — só palpites de alto risco/alta recompensa têm sentido.`;
+      hedgeAdj = 'Foque em placares exatos improváveis que a mesa vai ignorar (zebras e goleadas).';
+    }
+
+    const lastGames = trackerData.games.filter(g => g.actual != null).slice(-5).map(g => {
+      const pts = calcPtsForGame(g, p.id);
+      return pts;
+    }).filter(x => x != null);
+    const trend = lastGames.length
+      ? `Últimos ${lastGames.length} jogos: ${lastGames.reduce((s,v) => s+v, 0)}pts (média ${(lastGames.reduce((s,v) => s+v, 0)/lastGames.length).toFixed(1)}/jogo)`
+      : 'Nenhum jogo registrado ainda.';
+
+    return `
+    <div class="bg-bg-card border border-${acc.color}/50 p-4">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-${acc.color} font-bold tracking-widest text-sm">${acc.name.toUpperCase()}</span>
+        <span class="px-2 py-0.5 bg-${posturaColor}/10 border border-${posturaColor}/40 text-${posturaColor} text-[9px] font-bold tracking-widest">${postura}</span>
+      </div>
+      <div class="text-2xl font-mono font-bold text-txt-hi tabular-nums mb-1">${p.total}pts <span class="text-sm text-txt-dim font-normal">${rank}° / ${total}</span></div>
+      ${inPodium
+        ? `<div class="text-[10px] text-acc-grn mb-2">✓ No pódio — ${board[2].total - p.total >= 0 ? `${p.total - (board[3]?.total ?? 0)}pts de vantagem sobre o 4°` : 'liderando'}</div>`
+        : `<div class="text-[10px] text-acc-red mb-2">↓ ${gap}pts atrás do ${board[2]?.name || '3°'} (${thirdPts}pts)</div>`}
+      <p class="text-[11px] text-txt-mid leading-relaxed mb-3">${posturaDesc}</p>
+      <div class="border-t border-border-l pt-2 mt-2">
+        <div class="text-[9px] text-txt-dim mb-1">AJUSTE DE PICK RECOMENDADO</div>
+        <p class="text-[11px] text-acc-cyn">${hedgeAdj}</p>
+      </div>
+      <div class="border-t border-border-l pt-2 mt-2 text-[10px] text-txt-dim">${trend}</div>
+    </div>`;
+  }).join('');
+
+  const gamesLeft = totalGames > 0 ? `<div class="text-[11px] text-txt-mid">Jogos registrados: ${playedGames}/${totalGames} finalizados</div>` : '';
+  const maxPts = playedGames * POINTS.exact;
+
+  $('#estrategia-content').innerHTML = cards + `
+    <div class="bg-bg-card border border-border-l p-4 col-span-full md:col-span-1">
+      <div class="text-[10px] tracking-widest text-txt-dim mb-3">VISÃO GERAL</div>
+      ${gamesLeft}
+      <div class="text-[11px] text-txt-mid mt-1">Pts máx disponíveis até agora: <span class="text-txt-hi font-bold">${maxPts}</span></div>
+      <div class="text-[11px] text-txt-mid mt-1">Lider do bolão: <span class="text-acc-grn font-bold">${board[0]?.name || '—'}</span> com <span class="text-txt-hi">${firstPts}pts</span></div>
+      <div class="mt-3 text-[10px] text-txt-dim">DICA: Altere os palpites antes do início de cada jogo para adaptar a estratégia conforme o placar evolui.</div>
+    </div>`;
+}
+
+/* ── CONFIG ── */
+function renderConfig() {
+  $('#info-total-part').textContent = trackerData.participants.length;
+  $('#info-total-games').textContent = trackerData.games.length;
+  $('#info-max-pts').textContent = trackerData.games.filter(g => g.actual != null).length * POINTS.exact + 'pts';
+
+  $('#participants-list').innerHTML = trackerData.participants.map((p, i) => {
+    const acc = OUR_ACCOUNTS.find(a => a.id === p.id);
+    const cls = p.isOurs ? `text-${acc?.color || 'acc-grn'} font-bold` : 'text-txt-hi';
+    return `
+    <div class="flex items-center justify-between text-xs py-1 border-b border-border-l">
+      <span class="${cls}">${p.name}${p.isOurs ? ' ★' : ''}</span>
+      ${!p.isOurs ? `<button onclick="removeParticipant(${i})" class="text-acc-red/50 hover:text-acc-red text-sm px-2">✕</button>` : '<span class="text-[9px] text-txt-dim px-2">CONTA</span>'}
+    </div>`;
+  }).join('');
+}
+
+/* ── ADD GAME ── */
+function showAddGameForm() {
+  const form = $('#add-game-form');
+  const current = selectedGameId ? MOCK_GAMES.find(g => g.id === selectedGameId) : null;
+  form.classList.remove('hidden');
+  form.innerHTML = `
+    <div class="text-[10px] tracking-widest text-acc-grn mb-2">NOVO JOGO</div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="text-[9px] text-txt-dim">TIME CASA</label>
+        <input id="ng-home" type="text" value="${current?.home || ''}" class="w-full bg-bg-card2 border border-border-m text-txt-hi text-xs px-2 py-1.5 mt-1 focus:outline-none focus:border-acc-grn">
+      </div>
+      <div>
+        <label class="text-[9px] text-txt-dim">TIME VISITANTE</label>
+        <input id="ng-away" type="text" value="${current?.away || ''}" class="w-full bg-bg-card2 border border-border-m text-txt-hi text-xs px-2 py-1.5 mt-1 focus:outline-none focus:border-acc-grn">
+      </div>
+    </div>
+    <div class="flex gap-2 mt-2">
+      <button onclick="confirmAddGame()" class="text-[10px] tracking-widest border border-acc-grn text-acc-grn px-3 py-1.5 hover:bg-acc-grn hover:text-bg-deep transition">✓ ADICIONAR</button>
+      <button onclick="$('#add-game-form').classList.add('hidden')" class="text-[10px] tracking-widest border border-border-m text-txt-dim px-3 py-1.5">CANCELAR</button>
+    </div>`;
+}
+
+function confirmAddGame() {
+  const home = $('#ng-home').value.trim();
+  const away = $('#ng-away').value.trim();
+  if (!home || !away) return;
+  const current = selectedGameId ? MOCK_GAMES.find(g => g.id === selectedGameId) : null;
+  trackerData.games.push({
+    fixtureId: current?.id || Date.now(),
+    home, away,
+    actual: null,
+    guesses: {}
+  });
+  saveTracker();
+  $('#add-game-form').classList.add('hidden');
+  renderJogos();
+}
+
+function removeGame(idx) {
+  if (!confirm('Remover esse jogo?')) return;
+  trackerData.games.splice(idx, 1);
+  saveTracker();
+  renderJogos();
+}
+
+/* ── MODAL DE PALPITES ── */
+function openModal(gameIdx) {
+  modalGameId = gameIdx;
+  const game = trackerData.games[gameIdx];
+  $('#modal-game-title').textContent = `${game.home} × ${game.away}`;
+  if (game.actual != null) {
+    $('#actual-home').value = game.actual.h;
+    $('#actual-away').value = game.actual.a;
+  } else {
+    $('#actual-home').value = '';
+    $('#actual-away').value = '';
+  }
+  updateModalPreview();
+  renderModalGuesses(game);
+  $('#guess-modal').classList.remove('hidden');
+  $('#guess-modal').style.display = 'flex';
+}
+
+function closeModal() {
+  $('#guess-modal').classList.add('hidden');
+  $('#guess-modal').style.display = '';
+  modalGameId = null;
+}
+
+function updateModalPreview() {
+  const h = parseInt($('#actual-home').value);
+  const a = parseInt($('#actual-away').value);
+  const preview = $('#modal-points-preview');
+  if (isNaN(h) || isNaN(a)) { preview.textContent = 'Entre o resultado real acima'; return; }
+  const lines = trackerData.participants.slice(0, 8).map(p => {
+    const guess = trackerData.games[modalGameId]?.guesses?.[p.id];
+    if (!guess) return '';
+    const pts = scoreGuess(guess.h, guess.a, h, a);
+    return `${p.name}: +${pts}pts`;
+  }).filter(Boolean).join(' · ');
+  preview.textContent = lines || 'Palpites ainda não registrados';
+}
+
+function renderModalGuesses(game) {
+  $('#modal-guesses-list').innerHTML = trackerData.participants.map((p, i) => {
+    const guess = game.guesses?.[p.id];
+    const acc = OUR_ACCOUNTS.find(a => a.id === p.id);
+    const labelCls = p.isOurs ? `text-${acc?.color || 'acc-grn'} font-bold` : 'text-txt-mid';
+    return `
+    <div class="flex items-center gap-3 py-1.5 border-b border-border-l">
+      <span class="${labelCls} w-28 text-xs truncate">${p.name}</span>
+      <input data-pid="${p.id}" data-side="h" type="number" min="0" max="20"
+        value="${guess?.h ?? ''}" placeholder="0"
+        class="guess-input w-12 bg-bg-card border border-border-m text-txt-hi text-center text-sm py-1 focus:outline-none focus:border-acc-cyn">
+      <span class="text-txt-dim">×</span>
+      <input data-pid="${p.id}" data-side="a" type="number" min="0" max="20"
+        value="${guess?.a ?? ''}" placeholder="0"
+        class="guess-input w-12 bg-bg-card border border-border-m text-txt-hi text-center text-sm py-1 focus:outline-none focus:border-acc-cyn">
+      ${guess && trackerData.games[modalGameId]?.actual != null
+        ? `<span class="text-[10px] font-bold text-acc-grn w-12 text-right">+${scoreGuess(guess.h, guess.a, trackerData.games[modalGameId].actual.h, trackerData.games[modalGameId].actual.a)}pts</span>`
+        : '<span class="w-12"></span>'}
+    </div>`;
+  }).join('');
+}
+
+function saveGuessesFromModal() {
+  const game = trackerData.games[modalGameId];
+  $$('.guess-input').forEach(inp => {
+    const pid  = inp.dataset.pid;
+    const side = inp.dataset.side;
+    const val  = parseInt(inp.value);
+    if (!isNaN(val)) {
+      if (!game.guesses[pid]) game.guesses[pid] = { h: 0, a: 0 };
+      game.guesses[pid][side] = val;
+    }
+  });
+  saveTracker();
+  closeModal();
+  renderJogos();
+  if (activeTrackerTab === 'placar') renderPlacar();
+  if (activeTrackerTab === 'estrategia') renderEstrategia();
+}
+
+function saveActualFromModal() {
+  const h = parseInt($('#actual-home').value);
+  const a = parseInt($('#actual-away').value);
+  if (isNaN(h) || isNaN(a)) return;
+  trackerData.games[modalGameId].actual = { h, a };
+  saveTracker();
+  updateModalPreview();
+  renderModalGuesses(trackerData.games[modalGameId]);
+}
+
+/* ── PARTICIPANTES ── */
+function addParticipantFromInput() {
+  const input = $('#new-participant-name');
+  const name  = input.value.trim();
+  if (!name) return;
+  const id = name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
+  trackerData.participants.push({ id, name, isOurs: false });
+  saveTracker();
+  input.value = '';
+  renderConfig();
+}
+
+function removeParticipant(idx) {
+  const p = trackerData.participants[idx];
+  if (p.isOurs) return;
+  if (!confirm(`Remover ${p.name}?`)) return;
+  trackerData.participants.splice(idx, 1);
+  saveTracker();
+  renderConfig();
+}
+
+/* ── INIT TRACKER ── */
+function initTracker() {
+  loadTracker();
+
+  $$('.tracker-tab').forEach(b => {
+    b.addEventListener('click', () => switchTrackerTab(b.id.replace('btn-tracker-', '')));
+  });
+  $('#btn-add-game').addEventListener('click', showAddGameForm);
+  $('#btn-add-participant').addEventListener('click', addParticipantFromInput);
+  $('#new-participant-name').addEventListener('keydown', e => { if (e.key === 'Enter') addParticipantFromInput(); });
+  $('#btn-close-modal').addEventListener('click', closeModal);
+  $('#btn-save-guesses').addEventListener('click', saveGuessesFromModal);
+  $('#btn-apply-actual').addEventListener('click', saveActualFromModal);
+  $('#actual-home').addEventListener('input', updateModalPreview);
+  $('#actual-away').addEventListener('input', updateModalPreview);
+  $('#btn-reset-tracker').addEventListener('click', () => {
+    if (confirm('ATENÇÃO: Apagar todo o histórico do tracker?')) {
+      trackerData = { participants: OUR_ACCOUNTS.map(a => ({ id: a.id, name: a.name, isOurs: true, account: a.account })), games: [] };
+      saveTracker();
+      renderPlacar(); renderConfig();
+    }
+  });
+
+  renderPlacar();
+}
+
+/* ─────────────────────────────────────────────────────── */
+
+async function initBolaoTerminal() {
+  loadStatsCache();
+  renderPointsDisplay();
+  renderLeagueSelector();
+  initAnalysisTabs();
+  initStandings();
+  initTracker();
+  bindTournamentControls();
+  await fetchPartidasReais();
+  updateClock();
+  setInterval(updateClock, 1000);
+}
+
+// Inicia a aplicação inteira puxando os dados reais
+initBolaoTerminal();
+
+</script>
+</body>
+</html>
