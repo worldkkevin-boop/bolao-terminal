@@ -27,10 +27,12 @@ export default async function GroupDashboard({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const { id } = await params
-  const { tab, filter } = await searchParams
+  const { tab, filter, rankingScope } = await searchParams
   const activeTab = typeof tab === 'string' ? tab : 'matches'
   const validFilters = ['upcoming', 'live', 'finished'] as const
   const activeFilter = typeof filter === 'string' && validFilters.includes(filter as any) ? filter as typeof validFilters[number] : 'upcoming'
+  const validScopes = ['overall', 'round', 'month'] as const
+  const activeScope = typeof rankingScope === 'string' && validScopes.includes(rankingScope as any) ? rankingScope as typeof validScopes[number] : 'overall'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -73,12 +75,46 @@ export default async function GroupDashboard({
   const userGuesses = allGuesses?.filter(g => g.user_id === user.id) || []
   const guessesMap = new Map(userGuesses.map(g => [g.match_id, g]))
 
-  // ==========================
-  // CÁLCULO DO LEADERBOARD
-  // ==========================
+  // 5. Puxa TODOS os matches FIN/LIVE para cálculo de leaderboard (independente do filtro da aba partidas)
+  const { data: allFinishedMatches } = await supabase
+    .from('matches')
+    .select('*')
+    .in('status', ['FIN', 'LIVE'])
+    .order('kickoff', { ascending: false })
 
-  // Lookup O(1) de matches por id (evita .find() repetido)
-  const matchesMap = new Map(matches?.map(m => [m.id, m]) || [])
+  // Lookup O(1) de matches por id para o leaderboard
+  const allMatchesMap = new Map(allFinishedMatches?.map(m => [m.id, m]) || [])
+
+  // Determinar escopo do ranking
+  let scopedMatchIds: Set<number>
+  let rankingSubtitle = 'Ranking Geral'
+
+  if (activeScope === 'round') {
+    // Pega a rodada do jogo FIN mais recente
+    const latestFinished = allFinishedMatches?.find(m => m.status === 'FIN')
+    const latestRound = latestFinished?.round || null
+    if (latestRound) {
+      scopedMatchIds = new Set(allFinishedMatches?.filter(m => m.round === latestRound).map(m => m.id) || [])
+      rankingSubtitle = `Ranking: ${latestRound}`
+    } else {
+      scopedMatchIds = new Set()
+      rankingSubtitle = 'Nenhuma rodada finalizada'
+    }
+  } else if (activeScope === 'month') {
+    const now = new Date()
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+    const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59))
+    const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+    scopedMatchIds = new Set(
+      allFinishedMatches?.filter(m => {
+        const k = new Date(m.kickoff)
+        return k >= monthStart && k <= monthEnd
+      }).map(m => m.id) || []
+    )
+    rankingSubtitle = `Ranking de ${monthNames[now.getUTCMonth()]}/${now.getUTCFullYear()}`
+  } else {
+    scopedMatchIds = new Set(allFinishedMatches?.map(m => m.id) || [])
+  }
 
   // Agrupa guesses por user_id uma vez só (evita .filter() repetido)
   const guessesByUser = new Map<string, typeof allGuesses>()
@@ -94,16 +130,14 @@ export default async function GroupDashboard({
   const leaderboard = group.group_members.map((member: any) => {
     let totalPoints = 0
     
-    // Pega os palpites do membro via Map — O(1)
     const memberGuesses = guessesByUser.get(member.user_id) || []
     
-    // Conta os pontos
     memberGuesses.forEach(guess => {
-      // Lookup O(1) no Map ao invés de .find()
-      const match = matchesMap.get(guess.match_id)
+      // Só conta se o match está no escopo selecionado
+      if (!scopedMatchIds.has(guess.match_id)) return
+      const match = allMatchesMap.get(guess.match_id)
       
-      // Só pontua se o jogo já acabou (FIN) ou estiver ao vivo (LIVE) pra emoção
-      if (match && (match.status === 'FIN' || match.status === 'LIVE') && match.score_home !== null && match.score_away !== null) {
+      if (match && match.score_home !== null && match.score_away !== null) {
         totalPoints += calculateScore(guess.score_home, guess.score_away, match.score_home, match.score_away)
       }
     })
@@ -310,10 +344,40 @@ export default async function GroupDashboard({
         {/* ABA: RANKING */}
         {activeTab === 'ranking' && (
           <section className="space-y-6 max-w-2xl mx-auto">
+
+            {/* Sub-abas de escopo */}
+            <div className="flex gap-2 justify-center">
+              {[
+                { key: 'overall', label: 'Geral', color: '#ffb547' },
+                { key: 'round',   label: 'Rodada Atual', color: '#00c2ff' },
+                { key: 'month',   label: 'Este Mês', color: '#00d68f' },
+              ].map(s => {
+                const isActive = activeScope === s.key
+                return (
+                  <Link
+                    key={s.key}
+                    href={`/groups/${group.id}?tab=ranking&rankingScope=${s.key}`}
+                    className={`text-[10px] md:text-xs font-bold tracking-wider px-4 py-2 rounded-full border transition-all ${
+                      isActive ? 'text-black' : 'text-[#8b94a8] border-[#2a3140] hover:border-[#5d6678]'
+                    }`}
+                    style={isActive ? { background: s.color, borderColor: s.color } : {}}
+                  >
+                    {s.label}
+                  </Link>
+                )
+              })}
+            </div>
+
             <div className="bg-[#12151b] border border-[#ffb547]/30 rounded-xl p-6">
               <div className="text-xs text-[#8b94a8] mb-6 text-center uppercase tracking-widest">
-                Pontuação atualizada em tempo real
+                {rankingSubtitle}
               </div>
+
+              {scopedMatchIds.size === 0 ? (
+                <div className="text-center text-[#5d6678] py-10 border border-dashed border-[#2a3140] rounded-xl">
+                  {activeScope === 'round' ? 'Nenhuma partida finalizada nesta rodada ainda' : 'Nenhuma partida finalizada neste mês ainda'}
+                </div>
+              ) : (
               
               <div className="space-y-3">
                 {leaderboard.map((entry: any, idx: number) => {
@@ -382,7 +446,7 @@ export default async function GroupDashboard({
                     </div>
                   )
                 })}
-              </div>
+              )}
             </div>
           </section>
         )}
