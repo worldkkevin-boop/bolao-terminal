@@ -4,7 +4,8 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { saveGuess, deleteGroup, leaveGroup } from './actions'
 import { calculateScore, calculateScoreDetailed } from '@/utils/scoring'
-import MatchCountdown, { computeInitialLabel } from '@/components/MatchCountdown'
+import MatchCountdown from '@/components/MatchCountdown'
+import { computeInitialLabel } from '@/utils/countdown'
 
 const flagsMap: Record<string, string> = {
   'Brazil': '🇧🇷', 'Argentina': '🇦🇷', 'France': '🇫🇷', 'Germany': '🇩🇪',
