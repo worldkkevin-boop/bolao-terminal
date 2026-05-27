@@ -76,6 +76,17 @@ export default async function GroupDashboard({
   const userGuesses = allGuesses?.filter(g => g.user_id === user.id) || []
   const guessesMap = new Map(userGuesses.map(g => [g.match_id, g]))
 
+  // 4.5 Puxa TODOS os pontos bônus deste grupo
+  const { data: bonusQuestions } = await supabase
+    .from('bonus_questions')
+    .select('id')
+    .eq('group_id', group.id)
+  
+  const { data: bonusAnswers } = await supabase
+    .from('bonus_answers')
+    .select('*')
+    .in('question_id', bonusQuestions?.map(q => q.id) || [])
+
   // 5. Puxa TODOS os matches FIN/LIVE para cálculo de leaderboard (independente do filtro da aba partidas)
   const { data: allFinishedMatches } = await supabase
     .from('matches')
@@ -130,8 +141,17 @@ export default async function GroupDashboard({
     }
   }
 
+  // Agrupa bônus por user_id
+  const bonusByUser = new Map<string, number>()
+  if (bonusAnswers) {
+    for (const b of bonusAnswers) {
+      bonusByUser.set(b.user_id, (bonusByUser.get(b.user_id) || 0) + (b.points_earned || 0))
+    }
+  }
+
   const leaderboard = group.group_members.map((member: any) => {
-    let totalPoints = 0
+    let matchPoints = 0
+    let bonusPoints = bonusByUser.get(member.user_id) || 0
     
     const memberGuesses = guessesByUser.get(member.user_id) || []
     
@@ -142,17 +162,21 @@ export default async function GroupDashboard({
       
       if (match && match.score_home !== null && match.score_away !== null) {
         if (match.status === 'FIN') {
-          totalPoints += guess.points ?? 0
+          matchPoints += guess.points ?? 0
         } else {
-          totalPoints += calculateScore(guess.score_home, guess.score_away, match.score_home, match.score_away)
+          matchPoints += calculateScore(guess.score_home, guess.score_away, match.score_home, match.score_away)
         }
       }
     })
+
+    const totalPoints = matchPoints + bonusPoints
 
     return {
       userId: member.user_id,
       name: member.profiles.full_name || 'Sem Nome',
       avatarUrl: member.profiles.avatar_url || null,
+      matchPoints,
+      bonusPoints,
       points: totalPoints
     }
   })
@@ -205,6 +229,12 @@ export default async function GroupDashboard({
           className={`pb-3 text-sm font-bold uppercase tracking-widest whitespace-nowrap ${activeTab === 'ranking' ? 'text-[#ffb547] border-b-2 border-[#ffb547]' : 'text-[#5d6678] hover:text-[#e6eaf2] transition'}`}
         >
           Ranking
+        </Link>
+        <Link 
+          href={`/groups/${group.id}/bonus`} 
+          className="pb-3 text-sm font-bold uppercase tracking-widest whitespace-nowrap text-[#5d6678] hover:text-[#e6eaf2] transition"
+        >
+          Bônus
         </Link>
         <Link 
           href={`/groups/${group.id}?tab=settings`} 
@@ -485,9 +515,16 @@ export default async function GroupDashboard({
                       </div>
 
                       {/* Pontuação */}
-                      <span className="text-[#00d68f] font-bold ml-4 text-lg whitespace-nowrap">
-                        {entry.points} <span className="text-xs text-[#5d6678]">pts</span>
-                      </span>
+                      <div className="flex flex-col items-end ml-4">
+                        <span className="text-[#00d68f] font-bold text-lg whitespace-nowrap">
+                          {entry.points} <span className="text-xs text-[#5d6678]">pts</span>
+                        </span>
+                        {entry.bonusPoints > 0 && (
+                          <span className="text-[10px] text-[#a13de3] font-bold tracking-wider">
+                            ({entry.matchPoints} + {entry.bonusPoints} bônus)
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
