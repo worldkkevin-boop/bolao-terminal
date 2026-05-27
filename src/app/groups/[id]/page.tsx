@@ -610,6 +610,27 @@ export default async function GroupDashboard({
               </div>
             </div>
 
+            {/* Exportação (owner only) */}
+            {currentUserRole === 'owner' && (
+              <>
+                <h2 className="text-[10px] tracking-[0.3em] text-[#00d68f] pt-6 uppercase">EXPORTAR DADOS DO BOLÃO</h2>
+                <div className="bg-[#12151b] border border-[#2a3140] rounded-xl p-6 flex flex-wrap gap-3">
+                  <a 
+                    href={`/api/groups/${group.id}/export?format=csv`} 
+                    className="bg-[#00d68f]/20 text-[#00d68f] border border-[#00d68f]/50 text-xs font-bold px-6 py-3 rounded-lg hover:bg-[#00d68f] hover:text-black transition flex items-center gap-2"
+                  >
+                    📥 Exportar CSV
+                  </a>
+                  <a 
+                    href={`/api/groups/${group.id}/export?format=pdf`} 
+                    className="bg-[#ff3d57]/20 text-[#ff3d57] border border-[#ff3d57]/50 text-xs font-bold px-6 py-3 rounded-lg hover:bg-[#ff3d57] hover:text-white transition flex items-center gap-2"
+                  >
+                    📄 Exportar PDF
+                  </a>
+                </div>
+              </>
+            )}
+
           </section>
         )}
       </div>
