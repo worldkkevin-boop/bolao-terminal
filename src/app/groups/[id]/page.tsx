@@ -185,7 +185,7 @@ export default async function GroupDashboard({ params }: { params: Promise<{ id:
             </div>
             
             <div className="space-y-2">
-              {leaderboard.map((entry: any, idx) => {
+              {leaderboard.map((entry: any, idx: number) => {
                 const isMe = entry.userId === user.id
                 return (
                   <div key={entry.userId} className={`flex justify-between items-center bg-[#08090b] border ${isMe ? 'border-[#00c2ff]' : 'border-[#2a3140]'} p-3`}>
