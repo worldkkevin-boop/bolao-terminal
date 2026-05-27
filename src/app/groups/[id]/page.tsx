@@ -129,7 +129,7 @@ export default async function GroupDashboard({ params }: { params: Promise<{ id:
                   </div>
 
                   {/* Form de Palpite */}
-                  <form action={saveGuess} className="flex flex-col items-end gap-2 bg-[#08090b] p-3 border border-[#1f242e]">
+                  <form action={saveGuess as unknown as (formData: FormData) => void} className="flex flex-col items-end gap-2 bg-[#08090b] p-3 border border-[#1f242e]">
                     <input type="hidden" name="matchId" value={match.id} />
                     <input type="hidden" name="groupId" value={group.id} />
                     
