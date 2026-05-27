@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import React from 'react';
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -27,7 +28,17 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {/* Script e Configuração da API-Sports para Web Components */}
+        <script type="module" src="https://widgets.api-sports.io/3.1.0/widgets.js" async />
+        {React.createElement('api-sports-widget', {
+          'data-type': 'config',
+          'data-sport': 'football',
+          'data-key': process.env.API_SPORTS_KEY || 'MISSING_API_KEY'
+        })}
+        
+        {children}
+      </body>
     </html>
   );
 }

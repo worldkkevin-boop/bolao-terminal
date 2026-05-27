@@ -1,11 +1,14 @@
 import { createClient } from '@/utils/supabase/server'
-import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import Link from 'next/link'
 import Image from 'next/image'
+import { redirect } from 'next/navigation'
+import { createServerClient } from '@supabase/ssr'
 import { saveGuess, leaveGroup, updateGroupScoringRules } from './actions'
 import { calculateScore, calculateScoreDetailed, SCORING_LABELS, ScoreCategory } from '@/utils/scoring'
 import { parseGroupScoringRules } from '@/utils/scoringRules'
 import MatchCountdown from '@/components/MatchCountdown'
+import MatchStatsModal from '@/components/MatchStatsModal'
 import { computeInitialLabel } from '@/utils/countdown'
 import CopyInviteButton from '@/components/CopyInviteButton'
 import TeamLogo from '@/components/TeamLogo'
@@ -384,14 +387,17 @@ export default async function GroupDashboard({
                         </div>
                       )}
 
-                      {/* Link ver palpites se o jogo começou */}
+                      {/* Links e Botões Extra */}
                       {hasStarted && (
-                        <Link 
-                          href={`/groups/${group.id}/matches/${match.id}`}
-                          className="w-full text-center text-[10px] text-[#00c2ff] hover:underline uppercase tracking-widest mt-2"
-                        >
-                          Ver palpites do grupo
-                        </Link>
+                        <div className="w-full flex items-center justify-between mt-2 pt-2 border-t border-[#1f242e] md:border-none md:mt-0 md:pt-0">
+                          <Link 
+                            href={`/groups/${group.id}/matches/${match.id}`}
+                            className="text-[10px] text-[#00c2ff] hover:underline uppercase tracking-widest"
+                          >
+                            Ver palpites do grupo
+                          </Link>
+                          <MatchStatsModal matchId={match.id} />
+                        </div>
                       )}
                     </div>
                   )
