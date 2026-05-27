@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { saveGuess, deleteGroup, leaveGroup } from './actions'
 import { calculateScore } from '@/utils/scoring'
+import MatchCountdown, { computeInitialLabel } from '@/components/MatchCountdown'
 
 const flagsMap: Record<string, string> = {
   'Brazil': '🇧🇷', 'Argentina': '🇦🇷', 'France': '🇫🇷', 'Germany': '🇩🇪',
@@ -243,6 +244,14 @@ export default async function GroupDashboard({
                         <span className="text-xs md:text-sm font-bold truncate text-center w-full">{match.away_team}</span>
                       </div>
                     </div>
+
+                    {/* Countdown ao vivo */}
+                    {!hasStarted && (() => {
+                      const { label, urgent } = computeInitialLabel(match.kickoff)
+                      return (
+                        <MatchCountdown kickoff={match.kickoff} initialLabel={label} initialUrgent={urgent} />
+                      )
+                    })()}
 
                     {hasStarted && pointsEarned !== null && (
                       <div className="text-xs text-[#ffb547] font-bold">
