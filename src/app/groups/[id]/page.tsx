@@ -106,13 +106,13 @@ export default async function GroupDashboard({
           <h1 className="font-bold text-3xl tracking-tight text-white uppercase">{group.name}</h1>
           <div className="mt-2 flex gap-3">
             {currentUserRole === 'owner' ? (
-              <form action={deleteGroup.bind(null, group.id)}>
+              <form action={deleteGroup.bind(null, group.id) as unknown as (formData: FormData) => void}>
                 <button type="submit" className="text-xs text-[#ff3d57] border border-[#ff3d57]/50 px-2 py-1 hover:bg-[#ff3d57] hover:text-white transition">
                   Excluir Bolão
                 </button>
               </form>
             ) : (
-              <form action={leaveGroup.bind(null, group.id)}>
+              <form action={leaveGroup.bind(null, group.id) as unknown as (formData: FormData) => void}>
                 <button type="submit" className="text-xs text-[#ffb547] border border-[#ffb547]/50 px-2 py-1 hover:bg-[#ffb547] hover:text-black transition">
                   Sair do Bolão
                 </button>
@@ -333,13 +333,13 @@ export default async function GroupDashboard({
 
               <div className="pt-4 border-t border-[#1f242e] flex">
                 {currentUserRole === 'owner' ? (
-                  <form action={deleteGroup.bind(null, group.id)}>
+                  <form action={deleteGroup.bind(null, group.id) as unknown as (formData: FormData) => void}>
                     <button type="submit" className="bg-transparent border border-[#ff3d57] text-[#ff3d57] text-xs font-bold px-6 py-2 rounded hover:bg-[#ff3d57] hover:text-white transition">
                       Excluir Bolão Permanentemente
                     </button>
                   </form>
                 ) : (
-                  <form action={leaveGroup.bind(null, group.id)}>
+                  <form action={leaveGroup.bind(null, group.id) as unknown as (formData: FormData) => void}>
                     <button type="submit" className="bg-transparent border border-[#ffb547] text-[#ffb547] text-xs font-bold px-6 py-2 rounded hover:bg-[#ffb547] hover:text-black transition">
                       Sair do Bolão
                     </button>
