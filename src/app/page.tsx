@@ -29,7 +29,7 @@ export default async function Dashboard() {
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-[#8b94a8]">Olá, {user.user_metadata.full_name || user.email}</span>
-          {user.email === 'kevinsantos.b.f@gmail.com' && (
+          {user.email === 'worldkkevin@gmail.com' && (
             <Link href="/super-admin/hedge" className="text-xs bg-[#00d68f] text-black font-bold px-3 py-1.5 rounded hover:bg-white transition flex items-center gap-1">
               <span>⚙️</span> ADMIN
             </Link>
