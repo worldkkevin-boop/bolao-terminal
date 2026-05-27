@@ -2,9 +2,9 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { saveGuess, leaveGroup } from './actions'
+import { saveGuess, leaveGroup, updateGroupScoringRules } from './actions'
 import { calculateScore, calculateScoreDetailed, SCORING_LABELS, ScoreCategory } from '@/utils/scoring'
-import { fetchScoringRules } from '@/utils/scoringRules'
+import { parseGroupScoringRules } from '@/utils/scoringRules'
 import MatchCountdown from '@/components/MatchCountdown'
 import { computeInitialLabel } from '@/utils/countdown'
 import CopyInviteButton from '@/components/CopyInviteButton'
@@ -46,8 +46,8 @@ export default async function GroupDashboard({
 
   const currentUserRole = group.group_members.find((m: any) => m.user_id === user.id)?.role
 
-  // 3. Regras de pontuação do banco (com fallback nos defaults)
-  const scoringRules = await fetchScoringRules()
+  // 3. Regras de pontuação do grupo (fallback nos defaults)
+  const scoringRules = parseGroupScoringRules(group.scoring_config)
 
   // 4. Puxa os Jogos (filtrados por status) + counts em paralelo
   const statusMap = { upcoming: 'UPC', live: 'LIVE', finished: 'FIN' } as const
@@ -554,23 +554,52 @@ export default async function GroupDashboard({
 
             {/* Regras de Pontuação */}
             <h2 className="text-[10px] tracking-[0.3em] text-[#5d6678] pt-6 uppercase">REGRAS DE PONTUAÇÃO DO BOLÃO</h2>
-            <div className="space-y-2">
-              {(Object.keys(SCORING_LABELS) as ScoreCategory[]).filter(c => c !== 'ERROU').map(category => {
-                const meta = SCORING_LABELS[category]
-                const pts = scoringRules[category]
-                return (
-                  <div key={category} className="bg-[#12151b] border border-[#2a3140] rounded-xl p-4 flex items-center justify-between gap-4 shadow-sm" style={{ borderLeftWidth: 4, borderLeftColor: meta.color }}>
-                    <div className="min-w-0">
-                      <h3 className="font-bold text-sm text-[#e6eaf2]">{meta.label}</h3>
-                      <p className="text-xs text-[#8b94a8] mt-0.5">{meta.desc}</p>
+            {currentUserRole === 'owner' ? (
+              <form action={updateGroupScoringRules.bind(null, group.id) as unknown as (formData: FormData) => void} className="space-y-2">
+                {(Object.keys(SCORING_LABELS) as ScoreCategory[]).filter(c => c !== 'ERROU').map(category => {
+                  const meta = SCORING_LABELS[category]
+                  return (
+                    <div key={category} className="bg-[#12151b] border border-[#2a3140] rounded-xl p-4 flex items-center justify-between gap-4" style={{ borderLeftWidth: 4, borderLeftColor: meta.color }}>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-sm" style={{ color: meta.color }}>{meta.label}</h3>
+                        <p className="text-xs text-[#8b94a8] mt-0.5">{meta.desc}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <input
+                          type="number"
+                          name={category}
+                          defaultValue={scoringRules[category]}
+                          min={0}
+                          max={100}
+                          className="w-16 bg-[#08090b] border border-[#2a3140] rounded text-center text-white font-bold text-sm py-1.5 focus:border-[#00c2ff] focus:outline-none"
+                        />
+                        <span className="text-xs text-[#5d6678]">pts</span>
+                      </div>
                     </div>
-                    <span className="text-xs font-bold px-3 py-1 rounded-full shrink-0" style={{ background: `${meta.color}20`, color: meta.color }}>
-                      +{pts} pts
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+                <button type="submit" className="w-full bg-[#00c2ff] text-black font-bold text-xs py-2.5 rounded-xl hover:bg-white transition mt-1">
+                  SALVAR PONTUAÇÃO
+                </button>
+              </form>
+            ) : (
+              <div className="space-y-2">
+                {(Object.keys(SCORING_LABELS) as ScoreCategory[]).filter(c => c !== 'ERROU').map(category => {
+                  const meta = SCORING_LABELS[category]
+                  return (
+                    <div key={category} className="bg-[#12151b] border border-[#2a3140] rounded-xl p-4 flex items-center justify-between gap-4" style={{ borderLeftWidth: 4, borderLeftColor: meta.color }}>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-sm text-[#e6eaf2]">{meta.label}</h3>
+                        <p className="text-xs text-[#8b94a8] mt-0.5">{meta.desc}</p>
+                      </div>
+                      <span className="text-xs font-bold px-3 py-1 rounded-full shrink-0" style={{ background: `${meta.color}20`, color: meta.color }}>
+                        +{scoringRules[category]} pts
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
 
             {/* Administração */}
             <h2 className="text-[10px] tracking-[0.3em] text-[#ff3d57] pt-6 uppercase">ADMINISTRAÇÃO DO BOLÃO</h2>
