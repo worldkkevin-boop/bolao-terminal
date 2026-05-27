@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { buildScoreMatrix, aggregateOutcomes, expectedValue } from '@/utils/hedgeMath'
+import TournamentMode from './TournamentMode'
 
 export default function PoissonMatrix() {
   const [lambdaHome, setLambdaHome] = useState<number>(1.4)
@@ -65,6 +66,8 @@ export default function PoissonMatrix() {
           {bestGuess.h} x {bestGuess.a} <span className="text-sm text-[#8b94a8] font-normal ml-2">({bestEV.toFixed(2)} pts esperados)</span>
         </div>
       </div>
+
+      <TournamentMode lambdaHome={lambdaHome} lambdaAway={lambdaAway} />
     </div>
   )
 }

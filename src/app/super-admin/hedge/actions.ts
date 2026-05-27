@@ -10,14 +10,18 @@ export async function syncMatchesToDB() {
   if (!user || user.email !== 'worldkkevin@gmail.com') return { error: 'Não autorizado' }
 
   try {
-    // Isso é um MOCK por enquanto.
-    // O próximo passo será conectar isso à API-Sports como o HTML antigo fazia!
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    const syncSecret = process.env.SYNC_SECRET || ''
     
-    // Deleta os jogos antigos (Apenas para debug)
-    // await supabase.from('matches').delete().neq('id', '0')
+    const res = await fetch(`${siteUrl}/api/sync?secret=${syncSecret}`, { cache: 'no-store' })
+    const data = await res.json()
+    
+    if (!res.ok) {
+      throw new Error(data.error || 'Erro desconhecido na sincronização')
+    }
 
     revalidatePath('/super-admin/hedge')
-    return { success: true }
+    return { success: true, count: data.count }
   } catch (err: any) {
     return { error: err.message }
   }
