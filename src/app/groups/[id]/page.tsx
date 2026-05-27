@@ -446,6 +446,7 @@ export default async function GroupDashboard({
                     </div>
                   )
                 })}
+              </div>
               )}
             </div>
           </section>
