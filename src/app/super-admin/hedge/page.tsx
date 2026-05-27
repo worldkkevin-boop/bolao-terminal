@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { syncMatchesToDB } from './actions'
+import PoissonMatrix from '@/components/hedge/PoissonMatrix'
 
 export default async function SuperAdminPage() {
   const supabase = await createClient()
@@ -78,9 +79,7 @@ export default async function SuperAdminPage() {
       {/* ÁREA MATEMÁTICA (POISSON / HEDGE) */}
       <section>
         <div className="text-[10px] tracking-[0.3em] text-[#8b5cf6] mb-4">HEDGE ENGINE (PREVISÃO ESTATÍSTICA)</div>
-        <div className="bg-[#08090b] border border-[#8b5cf6]/30 p-6 rounded-xl">
-           <p className="text-sm text-[#8b94a8]">A área de matriz de distribuição de Poisson será portada do arquivo HTML legado para React em breve.</p>
-        </div>
+        <PoissonMatrix />
       </section>
 
     </div>
