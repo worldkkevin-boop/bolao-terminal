@@ -333,10 +333,9 @@ export default async function GroupDashboard({
                                 EXATO: 'Placar Exato',
                                 VENCEDOR_GOLS: 'Vencedor e Gols',
                                 EMPATE: 'Empate Acertado',
-                                VENCEDOR_SALDO: 'Vencedor e Saldo',
+                                VENCEDOR_SALDO: 'Vencedor e Saldo de Gols',
                                 VENCEDOR_GOLS_PERDEDOR: 'Vencedor e Gols do Perdedor',
-                                VENCEDOR: 'Apenas Vencedor',
-                                GOLS_PARCIAL: 'Gols de um Time',
+                                VENCEDOR: 'Vencedor',
                                 ERROU: 'Nenhum Acerto'
                               }[scoreDetails.category]
                             }
@@ -559,30 +558,25 @@ export default async function GroupDashboard({
 
             {/* Regras de Pontuação */}
             <h2 className="text-[10px] tracking-[0.3em] text-[#5d6678] pt-6 uppercase">REGRAS DE PONTUAÇÃO DO BOLÃO</h2>
-            <div className="space-y-3">
-              <div className="bg-[#12151b] border-l-4 border-l-[#00d68f] border-[#2a3140] rounded-r-xl p-5 shadow-sm">
-                <div className="flex justify-between items-center mb-1">
-                  <h3 className="font-bold text-[#e6eaf2]">Placar Exato</h3>
-                  <span className="bg-[#00d68f]/20 text-[#00d68f] px-3 py-1 rounded-full text-xs font-bold">+30 pts</span>
+            <div className="space-y-2">
+              {[
+                { label: 'Placar Exato',              pts: 25, color: '#00d68f', desc: 'Cravou o placar. Ex: palpitou 2x1 e deu 2x1.' },
+                { label: 'Vencedor e gols',           pts: 18, color: '#00c2ff', desc: 'Acertou o vencedor e os gols de um dos times. Ex: palpitou 2x1 e deu 2x0.' },
+                { label: 'Vencedor e saldo de gols',  pts: 15, color: '#5865F2', desc: 'Acertou o vencedor e a diferença de gols. Ex: palpitou 2x1 e deu 1x0.' },
+                { label: 'Empate',                    pts: 15, color: '#a13de3', desc: 'Acertou que ia empatar (placar diferente). Ex: palpitou 2x2 e deu 1x1.' },
+                { label: 'Vencedor e gols do perdedor', pts: 12, color: '#ffb547', desc: 'Acertou o vencedor e os gols do time perdedor. Ex: palpitou 2x0 e deu 3x0.' },
+                { label: 'Vencedor',                  pts: 6,  color: '#ff8c42', desc: 'Acertou apenas quem venceu o jogo. Ex: palpitou 2x0 e deu 3x2.' },
+              ].map(rule => (
+                <div key={rule.label} className="bg-[#12151b] border-[#2a3140] border rounded-xl p-4 flex items-center justify-between gap-4 shadow-sm" style={{ borderLeftWidth: 4, borderLeftColor: rule.color }}>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-sm text-[#e6eaf2]">{rule.label}</h3>
+                    <p className="text-xs text-[#8b94a8] mt-0.5">{rule.desc}</p>
+                  </div>
+                  <span className="text-xs font-bold px-3 py-1 rounded-full shrink-0" style={{ background: `${rule.color}20`, color: rule.color }}>
+                    +{rule.pts} pts
+                  </span>
                 </div>
-                <p className="text-xs text-[#8b94a8]">Você cravou o placar. Ex: Palpitou 2x1 e o jogo terminou 2x1.</p>
-              </div>
-
-              <div className="bg-[#12151b] border-l-4 border-l-[#5865F2] border-[#2a3140] rounded-r-xl p-5 shadow-sm">
-                <div className="flex justify-between items-center mb-1">
-                  <h3 className="font-bold text-[#e6eaf2]">Vencedor e Saldo</h3>
-                  <span className="bg-[#5865F2]/20 text-[#5865F2] px-3 py-1 rounded-full text-xs font-bold">+18 pts</span>
-                </div>
-                <p className="text-xs text-[#8b94a8]">Acertou quem ganhou e a diferença de gols, mas errou o placar.</p>
-              </div>
-
-              <div className="bg-[#12151b] border-l-4 border-l-[#ffb547] border-[#2a3140] rounded-r-xl p-5 shadow-sm">
-                <div className="flex justify-between items-center mb-1">
-                  <h3 className="font-bold text-[#e6eaf2]">Vencedor</h3>
-                  <span className="bg-[#ffb547]/20 text-[#ffb547] px-3 py-1 rounded-full text-xs font-bold">+15 pts</span>
-                </div>
-                <p className="text-xs text-[#8b94a8]">Acertou apenas quem venceu o jogo.</p>
-              </div>
+              ))}
             </div>
 
             {/* Administração */}

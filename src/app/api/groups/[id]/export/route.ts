@@ -87,7 +87,7 @@ export async function GET(
         const details = calculateScoreDetailed(guess.score_home, guess.score_away, match.score_home, match.score_away)
         matchPoints += guess.points ?? details.points
         if (details.category === 'EXATO') exactCount++
-        if (details.category !== 'ERROU' && details.category !== 'GOLS_PARCIAL') winnerCount++
+        if (details.category !== 'ERROU') winnerCount++
       }
     })
 
