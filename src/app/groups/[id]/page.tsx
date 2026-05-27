@@ -1,7 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { saveGuess } from './actions'
+import { saveGuess, deleteGroup, leaveGroup } from './actions'
 import { calculateScore } from '@/utils/scoring'
 
 export default async function GroupDashboard({ params }: { params: Promise<{ id: string }> }) {
@@ -82,6 +82,21 @@ export default async function GroupDashboard({ params }: { params: Promise<{ id:
         <div>
           <div className="text-[10px] tracking-[0.3em] text-[#00c2ff]">BOLÃO:</div>
           <h1 className="font-bold text-3xl tracking-tight text-white uppercase">{group.name}</h1>
+          <div className="mt-2 flex gap-3">
+            {currentUserRole === 'owner' ? (
+              <form action={deleteGroup.bind(null, group.id)}>
+                <button type="submit" className="text-xs text-[#ff3d57] border border-[#ff3d57]/50 px-2 py-1 hover:bg-[#ff3d57] hover:text-white transition">
+                  Excluir Bolão
+                </button>
+              </form>
+            ) : (
+              <form action={leaveGroup.bind(null, group.id)}>
+                <button type="submit" className="text-xs text-[#ffb547] border border-[#ffb547]/50 px-2 py-1 hover:bg-[#ffb547] hover:text-black transition">
+                  Sair do Bolão
+                </button>
+              </form>
+            )}
+          </div>
         </div>
         <div className="bg-[#12151b] border border-[#2a3140] px-4 py-2 flex items-center gap-3">
           <span className="text-[10px] tracking-widest text-[#5d6678]">CÓDIGO DE CONVITE:</span>

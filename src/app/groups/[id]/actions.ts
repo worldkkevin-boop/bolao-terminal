@@ -51,3 +51,34 @@ export async function saveGuess(formData: FormData) {
   revalidatePath(`/groups/${groupId}`)
   return { success: true }
 }
+
+export async function deleteGroup(groupId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autorizado' }
+
+  // Excluir grupo (apenas se for owner)
+  const { error } = await supabase
+    .from('groups')
+    .delete()
+    .eq('id', groupId)
+    .eq('owner_id', user.id)
+
+  if (error) return { error: 'Erro ao excluir grupo' }
+  redirect('/')
+}
+
+export async function leaveGroup(groupId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autorizado' }
+
+  const { error } = await supabase
+    .from('group_members')
+    .delete()
+    .eq('group_id', groupId)
+    .eq('user_id', user.id)
+
+  if (error) return { error: 'Erro ao sair do grupo' }
+  redirect('/')
+}
