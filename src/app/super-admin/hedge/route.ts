@@ -43,6 +43,24 @@ export async function GET(request: Request) {
             // mas por enquanto, os usuários reais estão sendo listados!
             console.log('Membros carregados do banco:', window.ACCOUNTS);
           }
+          
+          // Inject Back Button
+          const backBtn = document.createElement('a');
+          backBtn.href = '/';
+          backBtn.innerText = '⬅ VOLTAR AO BOLÃO';
+          backBtn.style.position = 'fixed';
+          backBtn.style.top = '15px';
+          backBtn.style.left = '15px';
+          backBtn.style.backgroundColor = '#1f242e';
+          backBtn.style.color = '#fff';
+          backBtn.style.border = '1px solid #2a3140';
+          backBtn.style.padding = '8px 16px';
+          backBtn.style.borderRadius = '4px';
+          backBtn.style.fontFamily = 'monospace';
+          backBtn.style.fontWeight = 'bold';
+          backBtn.style.textDecoration = 'none';
+          backBtn.style.zIndex = '9999';
+          document.body.appendChild(backBtn);
         } catch(e) {
           console.error('Erro na injeção SaaS', e);
         }

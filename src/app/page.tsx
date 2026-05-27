@@ -29,11 +29,11 @@ export default async function Dashboard() {
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-[#8b94a8]">Olá, {user.user_metadata.full_name || user.email}</span>
-          
-          <Link href="/super-admin/hedge" className="text-xs bg-[#00d68f] text-black font-bold px-3 py-1.5 rounded hover:bg-white transition flex items-center gap-1">
-            <span>⚙️</span> ADMIN
-          </Link>
-
+          {user.email === 'kevinsantos.b.f@gmail.com' && (
+            <Link href="/super-admin/hedge" className="text-xs bg-[#00d68f] text-black font-bold px-3 py-1.5 rounded hover:bg-white transition flex items-center gap-1">
+              <span>⚙️</span> ADMIN
+            </Link>
+          )}
           <form action="/auth/signout" method="post">
             <button className="text-xs border border-[#2a3140] px-3 py-1.5 hover:border-[#ff3d57] hover:text-[#ff3d57] transition">
               Sair
