@@ -1,48 +1,43 @@
-'use client'
-
-import { useState } from 'react'
 import Image from 'next/image'
 
-type Props = {
-  teamId?: number
+type Size = 'sm' | 'md' | 'lg' | 'xl'
+
+interface TeamLogoProps {
+  teamId: number
   teamName: string
-  size?: 'sm' | 'md' | 'lg' | 'xl'
+  size?: Size
 }
 
-const SIZE_PX: Record<NonNullable<Props['size']>, number> = {
-  sm: 24,
-  md: 40,
-  lg: 64,
-  xl: 96,
-}
-
-export default function TeamLogo({ teamId, teamName, size = 'md' }: Props) {
-  const [error, setError] = useState(false)
-  const px = SIZE_PX[size]
-  const initials = teamName.slice(0, 2).toUpperCase()
-
-  if (!teamId || error) {
-    return (
-      <div
-        className="rounded-full bg-[#2a3140] flex items-center justify-center font-bold text-[#8b94a8] shrink-0"
-        style={{ width: px, height: px, fontSize: px * 0.35 }}
-      >
-        {initials}
-      </div>
-    )
+export default function TeamLogo({ teamId, teamName, size = 'md' }: TeamLogoProps) {
+  const dimensions: Record<Size, number> = {
+    sm: 24,
+    md: 40,
+    lg: 64,
+    xl: 96,
   }
 
+  const s = dimensions[size]
+  const fallback = teamName.substring(0, 2).toUpperCase()
+
   return (
-    <Image
-      src={`https://media.api-sports.io/football/teams/${teamId}.png`}
-      alt={teamName}
-      width={px}
-      height={px}
-      unoptimized
-      loading="lazy"
-      className="rounded-full bg-white p-0.5 object-contain shrink-0"
-      style={{ width: px, height: px }}
-      onError={() => setError(true)}
-    />
+    <div 
+      className="relative flex items-center justify-center shrink-0 rounded-full bg-[#2a3140] text-white"
+      style={{ width: s, height: s }}
+      title={teamName}
+    >
+      {/* Fallback caso a imagem falhe (fica por baixo) */}
+      <span className="absolute font-bold text-xs">{fallback}</span>
+      
+      <Image
+        src={`https://media.api-sports.io/football/teams/${teamId}.png`}
+        alt={teamName}
+        width={s}
+        height={s}
+        loading="lazy"
+        unoptimized={true}
+        // Se a imagem falhar, a cor do texto herda transparente (esconde o alt) e a gente torce pro browser não zoar muito o bg-white
+        className="relative z-10 rounded-full bg-white p-1 object-contain w-full h-full text-transparent"
+      />
+    </div>
   )
 }
