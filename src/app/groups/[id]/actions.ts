@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
@@ -54,11 +55,11 @@ export async function saveGuess(formData: FormData) {
 }
 
 export async function deleteGroup(groupId: string) {
+  // Verifica ownership com client autenticado (respeita RLS de leitura)
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autorizado' }
 
-  // Confirma que o user é owner antes de qualquer coisa
   const { data: group } = await supabase
     .from('groups')
     .select('id')
@@ -68,26 +69,36 @@ export async function deleteGroup(groupId: string) {
 
   if (!group) return { error: 'Não autorizado' }
 
-  // Deleta registros filhos na ordem correta (FK constraints)
-  const { data: bonusQuestions } = await supabase
+  // Usa service role para bypassar RLS nas deleções
+  const admin = createAdminClient()
+
+  const { data: bonusQuestions } = await admin
     .from('bonus_questions')
     .select('id')
     .eq('group_id', groupId)
 
   if (bonusQuestions && bonusQuestions.length > 0) {
-    await supabase
+    const { error: baErr } = await admin
       .from('bonus_answers')
       .delete()
-      .in('question_id', bonusQuestions.map(q => q.id))
+      .in('question_id', bonusQuestions.map((q: { id: string }) => q.id))
+    if (baErr) { console.error('[deleteGroup] bonus_answers:', baErr); return { error: 'Erro ao excluir grupo' } }
   }
 
-  await supabase.from('bonus_questions').delete().eq('group_id', groupId)
-  await supabase.from('guesses').delete().eq('group_id', groupId)
-  await supabase.from('group_members').delete().eq('group_id', groupId)
+  const steps: Array<{ table: string; filter: { col: string; val: string } }> = [
+    { table: 'bonus_questions', filter: { col: 'group_id', val: groupId } },
+    { table: 'guesses',         filter: { col: 'group_id', val: groupId } },
+    { table: 'group_members',   filter: { col: 'group_id', val: groupId } },
+  ]
 
-  const { error } = await supabase.from('groups').delete().eq('id', groupId)
+  for (const step of steps) {
+    const { error } = await admin.from(step.table).delete().eq(step.filter.col, step.filter.val)
+    if (error) { console.error(`[deleteGroup] ${step.table}:`, error); return { error: 'Erro ao excluir grupo' } }
+  }
 
-  if (error) return { error: 'Erro ao excluir grupo' }
+  const { error: groupErr } = await admin.from('groups').delete().eq('id', groupId)
+  if (groupErr) { console.error('[deleteGroup] groups:', groupErr); return { error: 'Erro ao excluir grupo' } }
+
   redirect('/')
 }
 
