@@ -56,3 +56,40 @@ $$ language plpgsql security definer;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+/*
+=============================================================================
+[MIGRATION/BACKFILL] - Leaderboard Asíncrono
+=============================================================================
+A partir de agora, o campo `points` na tabela `guesses` será preenchido
+automaticamente pela rota /api/sync/route.ts quando os jogos mudarem
+para o status 'FIN'. 
+
+Para os jogos antigos que já estão como 'FIN' no banco de dados e possuem 
+os palpites com points = 0 (valor default), é necessário rodar um BACKFILL.
+
+Você pode criar um script Node.js único ou rota temporária no Next.js com:
+
+```typescript
+import { createClient } from '@supabase/supabase-js'
+import { calculateScore } from '@/utils/scoring'
+
+const supabase = createClient(URL, SERVICE_ROLE_KEY)
+
+async function backfill() {
+  const { data: matches } = await supabase.from('matches').select('*').eq('status', 'FIN')
+  const { data: guesses } = await supabase.from('guesses').select('*')
+  
+  const guessesToUpdate = guesses.filter(g => g.points === 0).map(g => {
+    const m = matches.find(m => m.id === g.match_id)
+    if (!m || m.score_home === null) return null
+    const pts = calculateScore(g.score_home, g.score_away, m.score_home, m.score_away)
+    return pts > 0 ? { ...g, points: pts } : null
+  }).filter(Boolean)
+
+  await supabase.from('guesses').upsert(guessesToUpdate, { onConflict: 'id' })
+  console.log(`Backfill completo: ${guessesToUpdate.length} atualizados.`)
+}
+```
+=============================================================================
+*/

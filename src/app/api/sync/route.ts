@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 // Importamos uma lib do supabase que bypassa RLS para uso em backend
 import { createClient } from '@supabase/supabase-js'
+import { calculateScore } from '@/utils/scoring'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -68,7 +69,15 @@ export async function GET(request: Request) {
       }
     })
 
-    // 3. Salva no banco de dados
+    // 2.5 Buscar status atual das partidas antes do upsert para saber quem transicionou para FIN
+    const matchIds = upsertData.map(m => m.id)
+    const { data: oldMatches } = await supabaseAdmin
+      .from('matches')
+      .select('id, status')
+      .in('id', matchIds)
+    const oldStatusMap = new Map(oldMatches?.map(m => [m.id, m.status]) || [])
+
+    // 3. Salva no banco de dados (matches)
     if (upsertData.length > 0) {
       const { error } = await supabaseAdmin
         .from('matches')
@@ -80,7 +89,53 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, count: upsertData.length })
+    // 4. Recalcular e atualizar pontos para partidas recém-finalizadas
+    const newlyFinishedMatches = upsertData.filter(m => 
+      m.status === 'FIN' && 
+      oldStatusMap.get(m.id) !== 'FIN' && 
+      m.score_home !== null && 
+      m.score_away !== null
+    )
+
+    let guessesUpdated = 0
+    let calcTimeMs = 0
+
+    if (newlyFinishedMatches.length > 0) {
+      const startCalc = performance.now()
+      const finishedIds = newlyFinishedMatches.map(m => m.id)
+      
+      const { data: guesses } = await supabaseAdmin
+        .from('guesses')
+        .select('*')
+        .in('match_id', finishedIds)
+        
+      if (guesses && guesses.length > 0) {
+        const guessesToUpsert = guesses.map(g => {
+          const match = newlyFinishedMatches.find(m => m.id === g.match_id)
+          if (!match) return g
+          const points = calculateScore(g.score_home, g.score_away, match.score_home, match.score_away)
+          return { ...g, points }
+        })
+
+        const { error: guessErr } = await supabaseAdmin
+          .from('guesses')
+          .upsert(guessesToUpsert, { onConflict: 'id' })
+
+        if (guessErr) {
+          console.error('Erro ao atualizar guesses:', guessErr)
+        } else {
+          guessesUpdated = guessesToUpsert.length
+        }
+      }
+      calcTimeMs = Math.round(performance.now() - startCalc)
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      matchesUpserted: upsertData.length,
+      guessesUpdated,
+      calcTimeMs
+    })
 
   } catch (err: any) {
     console.error(err)

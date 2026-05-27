@@ -141,7 +141,11 @@ export default async function GroupDashboard({
       const match = allMatchesMap.get(guess.match_id)
       
       if (match && match.score_home !== null && match.score_away !== null) {
-        totalPoints += calculateScore(guess.score_home, guess.score_away, match.score_home, match.score_away)
+        if (match.status === 'FIN') {
+          totalPoints += guess.points ?? 0
+        } else {
+          totalPoints += calculateScore(guess.score_home, guess.score_away, match.score_home, match.score_away)
+        }
       }
     })
 
