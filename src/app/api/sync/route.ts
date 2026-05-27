@@ -70,12 +70,12 @@ export async function GET(request: Request) {
     })
 
     // 2.5 Buscar status atual das partidas antes do upsert para saber quem transicionou para FIN
-    const matchIds = upsertData.map(m => m.id)
+    const matchIds = upsertData.map((m: any) => m.id)
     const { data: oldMatches } = await supabaseAdmin
       .from('matches')
       .select('id, status')
       .in('id', matchIds)
-    const oldStatusMap = new Map(oldMatches?.map(m => [m.id, m.status]) || [])
+    const oldStatusMap = new Map(oldMatches?.map((m: any) => [m.id, m.status]) || [])
 
     // 3. Salva no banco de dados (matches)
     if (upsertData.length > 0) {
@@ -90,7 +90,7 @@ export async function GET(request: Request) {
     }
 
     // 4. Recalcular e atualizar pontos para partidas recém-finalizadas
-    const newlyFinishedMatches = upsertData.filter(m => 
+    const newlyFinishedMatches = upsertData.filter((m: any) => 
       m.status === 'FIN' && 
       oldStatusMap.get(m.id) !== 'FIN' && 
       m.score_home !== null && 
@@ -102,7 +102,7 @@ export async function GET(request: Request) {
 
     if (newlyFinishedMatches.length > 0) {
       const startCalc = performance.now()
-      const finishedIds = newlyFinishedMatches.map(m => m.id)
+      const finishedIds = newlyFinishedMatches.map((m: any) => m.id)
       
       const { data: guesses } = await supabaseAdmin
         .from('guesses')
@@ -110,8 +110,8 @@ export async function GET(request: Request) {
         .in('match_id', finishedIds)
         
       if (guesses && guesses.length > 0) {
-        const guessesToUpsert = guesses.map(g => {
-          const match = newlyFinishedMatches.find(m => m.id === g.match_id)
+        const guessesToUpsert = guesses.map((g: any) => {
+          const match = newlyFinishedMatches.find((m: any) => m.id === g.match_id)
           if (!match) return g
           const points = calculateScore(g.score_home, g.score_away, match.score_home, match.score_away)
           return { ...g, points }
