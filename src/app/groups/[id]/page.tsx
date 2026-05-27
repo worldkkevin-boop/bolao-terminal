@@ -388,17 +388,19 @@ export default async function GroupDashboard({
                       )}
 
                       {/* Links e Botões Extra */}
-                      {hasStarted && (
-                        <div className="w-full flex items-center justify-between mt-2 pt-2 border-t border-[#1f242e] md:border-none md:mt-0 md:pt-0">
+                      <div className="w-full flex items-center justify-between mt-3 pt-3 border-t border-[#1f242e] md:border-none md:mt-0 md:pt-0">
+                        {hasStarted ? (
                           <Link 
                             href={`/groups/${group.id}/matches/${match.id}`}
                             className="text-[10px] text-[#00c2ff] hover:underline uppercase tracking-widest"
                           >
                             Ver palpites do grupo
                           </Link>
-                          <MatchStatsModal matchId={match.id} />
-                        </div>
-                      )}
+                        ) : (
+                          <div /> // Espaçador para manter o alinhamento
+                        )}
+                        <MatchStatsModal matchId={match.id} />
+                      </div>
                     </div>
                   )
                 })}
