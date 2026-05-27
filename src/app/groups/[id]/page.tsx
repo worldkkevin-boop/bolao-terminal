@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { saveGuess, deleteGroup, leaveGroup } from './actions'
-import { calculateScore } from '@/utils/scoring'
+import { calculateScore, calculateScoreDetailed } from '@/utils/scoring'
 import MatchCountdown, { computeInitialLabel } from '@/components/MatchCountdown'
 
 const flagsMap: Record<string, string> = {
@@ -247,8 +247,10 @@ export default async function GroupDashboard({
                 const hasStarted = match.status !== 'UPC' && new Date(match.kickoff) < new Date()
 
                 let pointsEarned = null;
+                let scoreDetails = null;
                 if (hasStarted && guess && match.score_home !== null && match.score_away !== null) {
-                  pointsEarned = calculateScore(guess.score_home, guess.score_away, match.score_home, match.score_away);
+                  scoreDetails = calculateScoreDetailed(guess.score_home, guess.score_away, match.score_home, match.score_away);
+                  pointsEarned = scoreDetails.points;
                 }
 
                 return (
@@ -289,9 +291,45 @@ export default async function GroupDashboard({
                       )
                     })()}
 
-                    {hasStarted && pointsEarned !== null && (
+                    {/* Detalhes de Pontuação Pós-Jogo */}
+                    {hasStarted && guess && match.status === 'FIN' && scoreDetails && (
+                      <div className="w-full bg-[#08090b] border border-[#1f242e] rounded-xl p-4 mt-2 flex flex-col items-center gap-3">
+                        <div className="flex w-full justify-between px-6">
+                          <div className="text-center">
+                            <div className="text-[10px] tracking-widest text-[#5d6678] uppercase mb-1">Seu Palpite</div>
+                            <div className="font-bold text-white">{guess.score_home} - {guess.score_away}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-[10px] tracking-widest text-[#5d6678] uppercase mb-1">Resultado</div>
+                            <div className="font-bold text-white">{match.score_home} - {match.score_away}</div>
+                          </div>
+                        </div>
+                        {scoreDetails.points > 0 ? (
+                          <div className={`text-xs font-bold px-4 py-1.5 rounded-full bg-[#08090b] border ${scoreDetails.category === 'EXATO' ? 'text-[#00d68f] border-[#00d68f]/30' : 'text-[#00c2ff] border-[#00c2ff]/30'}`}>
+                            +{scoreDetails.points} pts · {
+                              {
+                                EXATO: 'Placar Exato',
+                                VENCEDOR_GOLS: 'Vencedor e Gols',
+                                EMPATE: 'Empate Acertado',
+                                VENCEDOR_SALDO: 'Vencedor e Saldo',
+                                VENCEDOR_GOLS_PERDEDOR: 'Vencedor e Gols do Perdedor',
+                                VENCEDOR: 'Apenas Vencedor',
+                                GOLS_PARCIAL: 'Gols de um Time',
+                                ERROU: 'Nenhum Acerto'
+                              }[scoreDetails.category]
+                            }
+                          </div>
+                        ) : (
+                          <div className="text-xs font-bold text-[#5d6678] px-4 py-1.5 rounded-full border border-[#1f242e]">
+                            Você não pontuou neste jogo
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {hasStarted && match.status === 'LIVE' && pointsEarned !== null && (
                       <div className="text-xs text-[#ffb547] font-bold">
-                        +{pointsEarned} PONTOS CONQUISTADOS
+                        +{pointsEarned} PONTOS (AO VIVO)
                       </div>
                     )}
 
