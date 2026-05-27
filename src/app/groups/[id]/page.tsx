@@ -94,7 +94,7 @@ export default async function GroupDashboard({
     const latestFinished = allFinishedMatches?.find(m => m.status === 'FIN')
     const latestRound = latestFinished?.round || null
     if (latestRound) {
-      scopedMatchIds = new Set(allFinishedMatches?.filter(m => m.round === latestRound).map(m => m.id) || [])
+      scopedMatchIds = new Set(allFinishedMatches?.filter(m => m.round === latestRound)?.map(m => m.id) || [])
       rankingSubtitle = `Ranking: ${latestRound}`
     } else {
       scopedMatchIds = new Set()
@@ -109,7 +109,7 @@ export default async function GroupDashboard({
       allFinishedMatches?.filter(m => {
         const k = new Date(m.kickoff)
         return k >= monthStart && k <= monthEnd
-      }).map(m => m.id) || []
+      })?.map(m => m.id) || []
     )
     rankingSubtitle = `Ranking de ${monthNames[now.getUTCMonth()]}/${now.getUTCFullYear()}`
   } else {
