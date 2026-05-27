@@ -12,6 +12,7 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.2",
     "@types/pdfkit": "^0.17.6",
+    "flag-icons": "^7.5.0",
     "mercadopago": "^3.0.0",
     "next": "16.2.6",
     "pdfkit": "^0.18.0",

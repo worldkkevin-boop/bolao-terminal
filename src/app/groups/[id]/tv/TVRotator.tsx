@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
-import { getFlagEmoji } from '@/utils/flags'
+import TeamFlag from '@/components/TeamFlag'
 import MatchCountdown from '@/components/MatchCountdown'
 import { computeInitialLabel } from '@/utils/countdown'
 
@@ -162,7 +162,7 @@ export default function TVRotator({ group, leaderboard, upcomingMatches, recentM
               return (
                 <div key={match.id} className="bg-[#0a0c10] border border-[#2a3140] p-8 rounded-3xl flex items-center justify-between shadow-xl">
                   <div className="flex flex-col flex-1 items-center">
-                    <span className="text-7xl mb-4 drop-shadow-lg">{getFlagEmoji(match.home_team)}</span>
+                    <TeamFlag team={match.home_team} size="lg" />
                     <span className="text-2xl font-bold text-white">{match.home_team}</span>
                   </div>
                   <div className="flex flex-col items-center px-12 min-w-[300px]">
@@ -170,7 +170,7 @@ export default function TVRotator({ group, leaderboard, upcomingMatches, recentM
                     <MatchCountdown kickoff={match.kickoff} initialLabel={label} initialUrgent={urgent} />
                   </div>
                   <div className="flex flex-col flex-1 items-center">
-                    <span className="text-7xl mb-4 drop-shadow-lg">{getFlagEmoji(match.away_team)}</span>
+                    <TeamFlag team={match.away_team} size="lg" />
                     <span className="text-2xl font-bold text-white">{match.away_team}</span>
                   </div>
                 </div>
@@ -187,7 +187,7 @@ export default function TVRotator({ group, leaderboard, upcomingMatches, recentM
               <div key={match.id} className="bg-[#0a0c10] border border-[#2a3140] p-8 rounded-3xl flex items-center justify-between shadow-xl relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#00d68f] to-transparent opacity-20"></div>
                 <div className="flex flex-col flex-1 items-center">
-                  <span className="text-7xl mb-4 drop-shadow-lg">{getFlagEmoji(match.home_team)}</span>
+                  <TeamFlag team={match.home_team} size="lg" />
                   <span className="text-2xl font-bold text-white">{match.home_team}</span>
                 </div>
                 <div className="flex flex-col items-center px-12">
@@ -197,7 +197,7 @@ export default function TVRotator({ group, leaderboard, upcomingMatches, recentM
                   </div>
                 </div>
                 <div className="flex flex-col flex-1 items-center">
-                  <span className="text-7xl mb-4 drop-shadow-lg">{getFlagEmoji(match.away_team)}</span>
+                  <TeamFlag team={match.away_team} size="lg" />
                   <span className="text-2xl font-bold text-white">{match.away_team}</span>
                 </div>
               </div>
