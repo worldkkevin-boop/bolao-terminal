@@ -7,6 +7,7 @@ import { calculateScore, calculateScoreDetailed } from '@/utils/scoring'
 import MatchCountdown from '@/components/MatchCountdown'
 import { computeInitialLabel } from '@/utils/countdown'
 import { getFlagEmoji } from '@/utils/flags'
+import CopyInviteButton from '@/components/CopyInviteButton'
 
 export default async function GroupDashboard({ 
   params,
@@ -201,6 +202,7 @@ export default async function GroupDashboard({
         <div className="bg-[#12151b] border border-[#2a3140] px-4 py-2 flex items-center gap-3 rounded">
           <span className="text-[10px] tracking-widest text-[#5d6678]">CÓDIGO DE CONVITE:</span>
           <span className="font-bold text-[#ffb547] text-lg">{group.invite_code}</span>
+          <CopyInviteButton inviteCode={group.invite_code} />
         </div>
       </header>
 
