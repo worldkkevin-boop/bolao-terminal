@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { saveGuess, deleteGroup, leaveGroup } from './actions'
 import { calculateScore } from '@/utils/scoring'
 
@@ -36,7 +37,7 @@ export default async function GroupDashboard({
   // 1. Puxa os dados do Grupo
   const { data: group } = await supabase
     .from('groups')
-    .select('*, group_members!inner(user_id, role, profiles(full_name))')
+    .select('*, group_members!inner(user_id, role, profiles(full_name, avatar_url))')
     .eq('id', id)
     .single()
 
@@ -102,6 +103,7 @@ export default async function GroupDashboard({
     return {
       userId: member.user_id,
       name: member.profiles.full_name || 'Sem Nome',
+      avatarUrl: member.profiles.avatar_url || null,
       points: totalPoints
     }
   })
@@ -273,13 +275,67 @@ export default async function GroupDashboard({
               <div className="space-y-3">
                 {leaderboard.map((entry: any, idx: number) => {
                   const isMe = entry.userId === user.id
+                  const rank = idx + 1
+                  const podiumConfig = rank === 1
+                    ? { border: '#FFD700', bg: 'rgba(255,215,0,0.06)', badge: '👑' }
+                    : rank === 2
+                    ? { border: '#C0C0C0', bg: 'rgba(192,192,192,0.05)', badge: '🥈' }
+                    : rank === 3
+                    ? { border: '#CD7F32', bg: 'rgba(205,127,50,0.05)', badge: '🥉' }
+                    : null
+
+                  const borderColor = podiumConfig ? podiumConfig.border : (isMe ? '#00c2ff' : '#2a3140')
+                  const bgStyle = podiumConfig ? podiumConfig.bg : 'transparent'
+                  const initial = (entry.name as string).charAt(0).toUpperCase()
+
                   return (
-                    <div key={entry.userId} className={`flex justify-between items-center bg-[#08090b] rounded-lg border ${isMe ? 'border-[#00c2ff]' : 'border-[#2a3140]'} p-4 shadow-sm`}>
-                      <span className={`font-bold ${isMe ? 'text-[#00c2ff]' : 'text-[#e6eaf2]'} text-sm truncate flex items-center gap-3`}>
-                        <span className="text-[#5d6678] w-6 text-right">{idx + 1}.</span> 
-                        {isMe ? 'VOCÊ' : entry.name}
+                    <div
+                      key={entry.userId}
+                      className="flex justify-between items-center rounded-lg p-4 shadow-sm transition-all hover:scale-[1.01]"
+                      style={{ border: `1px solid ${borderColor}`, background: `linear-gradient(135deg, ${bgStyle}, #08090b)` }}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Posição */}
+                        <span className="w-8 text-right text-sm font-bold" style={{ color: podiumConfig ? podiumConfig.border : '#5d6678' }}>
+                          {podiumConfig ? podiumConfig.badge : `${rank}.`}
+                        </span>
+
+                        {/* Avatar */}
+                        {entry.avatarUrl ? (
+                          <Image
+                            src={entry.avatarUrl}
+                            alt={entry.name}
+                            width={40}
+                            height={40}
+                            className="rounded-full object-cover"
+                            style={{ border: `2px solid ${podiumConfig ? podiumConfig.border : '#2a3140'}` }}
+                          />
+                        ) : (
+                          <div
+                            className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-black shrink-0"
+                            style={{ background: podiumConfig ? podiumConfig.border : '#5d6678', border: `2px solid ${podiumConfig ? podiumConfig.border : '#2a3140'}` }}
+                          >
+                            {initial}
+                          </div>
+                        )}
+
+                        {/* Nome + Label */}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`font-bold text-sm truncate ${isMe ? 'text-[#00c2ff]' : 'text-[#e6eaf2]'}`}>
+                            {entry.name}
+                          </span>
+                          {isMe && (
+                            <span className="text-[9px] font-bold tracking-widest bg-[#00c2ff]/20 text-[#00c2ff] px-2 py-0.5 rounded-full shrink-0">
+                              VOCÊ
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Pontuação */}
+                      <span className="text-[#00d68f] font-bold ml-4 text-lg whitespace-nowrap">
+                        {entry.points} <span className="text-xs text-[#5d6678]">pts</span>
                       </span>
-                      <span className="text-[#00d68f] font-bold ml-4 text-lg">{entry.points} <span className="text-xs text-[#5d6678]">pts</span></span>
                     </div>
                   )
                 })}
