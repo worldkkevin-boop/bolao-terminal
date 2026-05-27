@@ -11,6 +11,14 @@ export default async function Dashboard() {
     redirect('/login')
   }
 
+  // Buscar os grupos em que o usuário está
+  const { data: myMemberships } = await supabase
+    .from('group_members')
+    .select('groups ( id, name, invite_code )')
+    .eq('user_id', user.id)
+
+  const myGroups = myMemberships?.map((m: any) => m.groups).filter(Boolean) || []
+
   return (
     <div className="min-h-screen bg-[#08090b] text-[#e6eaf2] font-mono p-6">
       <header className="flex justify-between items-center mb-8 border-b border-[#1f242e] pb-4">
@@ -33,9 +41,9 @@ export default async function Dashboard() {
         
         {/* Grupos Section */}
         <section>
-          <div className="text-[10px] tracking-[0.3em] text-[#5d6678] mb-2">SEUS BOLÕES</div>
+          <div className="text-[10px] tracking-[0.3em] text-[#5d6678] mb-2">AÇÕES</div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
             
             {/* Create Group Card */}
             <div className="bg-[#12151b] border border-[#2a3140] p-6 rounded hover:border-[#00c2ff] transition flex flex-col items-start justify-center">
@@ -63,8 +71,32 @@ export default async function Dashboard() {
                 </button>
               </form>
             </div>
-
           </div>
+        </section>
+
+        {/* Meus Grupos Section */}
+        <section>
+          <div className="text-[10px] tracking-[0.3em] text-[#5d6678] mb-2">MEUS BOLÕES</div>
+          
+          {myGroups.length === 0 ? (
+            <div className="bg-[#12151b] border border-[#2a3140] p-6 rounded text-center text-[#8b94a8] text-sm">
+              Você ainda não está em nenhum grupo. Crie um ou entre usando um código acima!
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3">
+              {myGroups.map((g: any) => (
+                <Link key={g.id} href={`/groups/${g.id}`} className="bg-[#12151b] border border-[#2a3140] p-4 rounded hover:border-[#e6eaf2] transition flex justify-between items-center group">
+                  <div>
+                    <h3 className="font-bold text-[#e6eaf2] group-hover:text-[#00c2ff] transition">{g.name}</h3>
+                    <p className="text-xs text-[#5d6678]">Código: {g.invite_code}</p>
+                  </div>
+                  <div className="text-[#00c2ff]">
+                    ➔
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </section>
 
       </main>
